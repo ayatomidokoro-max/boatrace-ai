@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 
 from boatrace_ai.collectors import BoatraceOpenApiCollector, CollectionError
 from boatrace_ai.notifications import LineNotifier, NotificationError, format_line_message
+from boatrace_ai.monitoring import collect_important_changes, format_change_message
 from boatrace_ai.service import run_analysis
 from boatrace_ai.storage import Repository
 
@@ -22,6 +23,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--min-confidence", type=float, default=0.62)
     p.add_argument("--min-margin", type=float, default=4.0)
     p.add_argument("--notify-line", action="store_true", help="分析結果を個人LINEへ送信")
+    p.add_argument("--monitor-exhibition", action="store_true", help="展示後の重要変更だけを検出")
     return p
 
 
@@ -38,7 +40,8 @@ def main(argv: list[str] | None = None) -> int:
         weights = config.get("weights")
         if weights is not None and (set(weights) != {"lane", "national_win_rate", "national_top2", "local_win_rate", "average_start_timing", "motor_top2", "boat_top2", "flying_count"} or abs(sum(weights.values()) - 1.0) > 1e-6):
             raise ValueError("weightsは既定の8項目を持ち、合計1.0にしてください")
-        analyses = run_analysis(race_date, BoatraceOpenApiCollector(), Repository(args.db),
+        repository = Repository(args.db)
+        analyses = run_analysis(race_date, BoatraceOpenApiCollector(), repository,
                                 args.min_confidence, args.min_margin, weights)
     except (CollectionError, ValueError, json.JSONDecodeError) as exc:
         print(f"取得失敗（安全に終了）: {exc}", file=sys.stderr)
@@ -60,11 +63,17 @@ def main(argv: list[str] | None = None) -> int:
         path = Path(args.json_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps([a.to_dict() for a in analyses], ensure_ascii=False, indent=2), encoding="utf-8")
-    if args.notify_line:
+    changes = collect_important_changes(analyses, repository)
+    if args.monitor_exhibition:
+        print(f"展示監視: 重要変更{len(changes)}件")
+    if args.notify_line and (not args.monitor_exhibition or changes):
         try:
-            LineNotifier.from_environment().send(format_line_message(analyses, race_date.isoformat()))
+            message = format_change_message(changes) if args.monitor_exhibition else format_line_message(analyses, race_date.isoformat())
+            LineNotifier.from_environment().send(message)
             print("LINE通知: 送信成功")
         except NotificationError as exc:
             print(f"LINE通知: {exc}", file=sys.stderr)
             return 1
+    elif args.notify_line and args.monitor_exhibition:
+        print("LINE通知: 重要変更なしのため送信しません")
     return 0

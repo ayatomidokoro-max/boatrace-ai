@@ -3,6 +3,14 @@
     "date": "2026-09-01", "stadium_number": 5, "race_number": 1,
     "closed_at": "2026-09-01 11:29:00", "grade_number_source": "一般",
     "title": "テスト杯", "subtitle": "予選", "day_number": 1,
+    "preview": {"wind_speed": 3, "wave_height": 2, "air_temperature": 25.0, "water_temperature": 24.0, "racers": {
+      "1": {"entry_number": 1, "course_number": 1, "start_timing": 0.05, "exhibition_time": 6.70},
+      "2": {"entry_number": 2, "course_number": 2, "start_timing": 0.08, "exhibition_time": 6.75},
+      "3": {"entry_number": 3, "course_number": 3, "start_timing": 0.10, "exhibition_time": 6.80},
+      "4": {"entry_number": 4, "course_number": 4, "start_timing": 0.06, "exhibition_time": 6.68},
+      "5": {"entry_number": 5, "course_number": 5, "start_timing": 0.12, "exhibition_time": 6.85},
+      "6": {"entry_number": 6, "course_number": 6, "start_timing": 0.15, "exhibition_time": 6.90}
+    }},
     "racers": {
       "1": {"entry_number": 1, "number": 1001, "name": "一号 太郎", "rank_number_source": "A1", "age": 30, "national_win_rate": 7.2, "national_top_2_percent": 54.0, "local_win_rate": 7.0, "average_start_timing": 0.13, "motor_top_2_percent": 42.0, "boat_top_2_percent": 38.0, "flying_count": 0},
       "2": {"entry_number": 2, "number": 1002, "name": "二号 次郎", "rank_number_source": "A2", "age": 35, "national_win_rate": 6.0, "national_top_2_percent": 42.0, "local_win_rate": 5.9, "average_start_timing": 0.16, "motor_top_2_percent": 35.0, "boat_top_2_percent": 34.0, "flying_count": 0},
@@ -13,4 +21,3 @@
     }
   }}}}}
 }
-

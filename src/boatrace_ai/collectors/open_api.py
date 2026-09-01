@@ -51,7 +51,10 @@ class BoatraceOpenApiCollector(Collector):
             for race_key, raw in stadium.get("races", {}).items():
                 stadium_number = int(raw.get("stadium_number", stadium_key))
                 entrants = []
+                preview = raw.get("preview") or {}
+                preview_racers = preview.get("racers") or {}
                 for lane_key, racer in raw.get("racers", {}).items():
+                    exhibition = preview_racers.get(str(lane_key), preview_racers.get(lane_key, {}))
                     entrants.append(Entrant(
                         lane=int(racer.get("entry_number", lane_key)),
                         racer_number=racer.get("number"), racer_name=racer.get("name"),
@@ -63,6 +66,9 @@ class BoatraceOpenApiCollector(Collector):
                         motor_top2=racer.get("motor_top_2_percent"),
                         boat_top2=racer.get("boat_top_2_percent"),
                         flying_count=racer.get("flying_count"),
+                        exhibition_time=exhibition.get("exhibition_time"),
+                        exhibition_start_timing=exhibition.get("start_timing"),
+                        exhibition_course=exhibition.get("course_number"),
                     ))
                 races.append(Race(
                     race_date=raw.get("date", ""), stadium_number=stadium_number,
@@ -72,6 +78,8 @@ class BoatraceOpenApiCollector(Collector):
                     subtitle=raw.get("subtitle"), day_number=raw.get("day_number"),
                     entrants=sorted(entrants, key=lambda item: item.lane),
                     source_url=source_url, fetched_at=fetched_at,
+                    wind_speed=preview.get("wind_speed"), wave_height=preview.get("wave_height"),
+                    air_temperature=preview.get("air_temperature"),
+                    water_temperature=preview.get("water_temperature"),
                 ))
         return sorted(races, key=lambda race: (race.stadium_number, race.race_number))
-

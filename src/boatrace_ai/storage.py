@@ -25,6 +25,12 @@ CREATE TABLE IF NOT EXISTS entrant_scores (
  data_completeness REAL NOT NULL, reasons_json TEXT NOT NULL,
  PRIMARY KEY(analysis_id, lane)
 );
+CREATE TABLE IF NOT EXISTS monitoring_states (
+ race_date TEXT NOT NULL, stadium_number INTEGER NOT NULL, race_number INTEGER NOT NULL,
+ snapshot_json TEXT NOT NULL, last_notified_signature TEXT,
+ updated_at TEXT NOT NULL,
+ PRIMARY KEY(race_date, stadium_number, race_number)
+);
 """
 
 
@@ -66,3 +72,27 @@ class Repository:
                 VALUES(?,?,?,?,?,?,?)""", [(analysis_id, s.lane, s.racer_number, s.racer_name,
                 s.score, s.data_completeness, json.dumps(s.reasons, ensure_ascii=False)) for s in analysis.scores])
 
+    def get_monitoring_state(self, race_date: str, stadium_number: int, race_number: int) -> dict | None:
+        with self.connect() as db:
+            row = db.execute("""SELECT snapshot_json,last_notified_signature FROM monitoring_states
+                WHERE race_date=? AND stadium_number=? AND race_number=?""",
+                (race_date, stadium_number, race_number)).fetchone()
+        return {"snapshot": json.loads(row[0]), "last_notified_signature": row[1]} if row else None
+
+    def save_monitoring_state(self, analysis: RaceAnalysis, signature: str | None) -> None:
+        race = analysis.race
+        snapshot = {
+            "decision": analysis.decision, "favorite_lane": analysis.favorite_lane,
+            "dark_horse_lane": analysis.dark_horse_lane, "confidence": analysis.confidence,
+            "scores": {str(score.lane): score.score for score in analysis.scores},
+        }
+        with self.connect() as db:
+            db.execute("""INSERT INTO monitoring_states
+                (race_date,stadium_number,race_number,snapshot_json,last_notified_signature,updated_at)
+                VALUES(?,?,?,?,?,datetime('now'))
+                ON CONFLICT(race_date,stadium_number,race_number) DO UPDATE SET
+                snapshot_json=excluded.snapshot_json,
+                last_notified_signature=COALESCE(excluded.last_notified_signature,monitoring_states.last_notified_signature),
+                updated_at=excluded.updated_at""",
+                (race.race_date, race.stadium_number, race.race_number,
+                 json.dumps(snapshot, ensure_ascii=False), signature))

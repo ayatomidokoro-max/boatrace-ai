@@ -18,6 +18,9 @@ class Entrant:
     motor_top2: float | None = None
     boat_top2: float | None = None
     flying_count: int | None = None
+    exhibition_time: float | None = None
+    exhibition_start_timing: float | None = None
+    exhibition_course: int | None = None
 
 
 @dataclass(slots=True)
@@ -34,6 +37,10 @@ class Race:
     entrants: list[Entrant] = field(default_factory=list)
     source_url: str = ""
     fetched_at: str = ""
+    wind_speed: float | None = None
+    wave_height: float | None = None
+    air_temperature: float | None = None
+    water_temperature: float | None = None
 
 
 @dataclass(slots=True)
@@ -60,4 +67,3 @@ class RaceAnalysis:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
-

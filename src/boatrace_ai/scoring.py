@@ -45,9 +45,22 @@ def score_entrant(entrant: Entrant, weights: dict[str, float] | None = None) -> 
             reasons.append(f"{name}={raw}")
     # 欠損は0点にせず、存在する項目の重みだけで再正規化する。
     score = 100 * weighted / present_weight
+    # 展示情報が揃った場合だけ最大±8点の控えめな補正を加える。
+    exhibition_reasons = []
+    if entrant.exhibition_time is not None:
+        exhibition_bonus = _clamp((7.10 - entrant.exhibition_time) / 0.45) * 5.0
+        score += exhibition_bonus
+        exhibition_reasons.append(f"展示タイム={entrant.exhibition_time}")
+    if entrant.exhibition_start_timing is not None:
+        start_bonus = (_clamp((0.25 - entrant.exhibition_start_timing) / 0.25) - 0.5) * 4.0
+        score += start_bonus
+        exhibition_reasons.append(f"展示ST={entrant.exhibition_start_timing}")
+    if entrant.exhibition_course is not None and entrant.exhibition_course != entrant.lane:
+        exhibition_reasons.append(f"進入変更={entrant.lane}枠→{entrant.exhibition_course}コース")
+    reasons.extend(exhibition_reasons)
     completeness = sum(getattr(entrant, name) is not None for name in FEATURES) / len(FEATURES)
     return EntrantScore(entrant.lane, entrant.racer_number, entrant.racer_name,
-                        round(score, 2), round(completeness, 3), reasons)
+                        round(max(0.0, min(100.0, score)), 2), round(completeness, 3), reasons)
 
 
 def analyze_race(race: Race, min_confidence: float = 0.62, min_margin: float = 4.0,
