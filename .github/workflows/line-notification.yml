@@ -1,6 +1,9 @@
 name: LINE notification
 
 on:
+  schedule:
+    # GitHub ActionsのcronはUTC。01:00 UTC = 10:00 JST。
+    - cron: "0 1 * * *"
   workflow_dispatch:
     inputs:
       race_date:
@@ -11,6 +14,10 @@ on:
 jobs:
   notify:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: daily-line-notification
+      cancel-in-progress: false
     permissions:
       contents: read
     env:
@@ -30,4 +37,3 @@ jobs:
           else
             python -m boatrace_ai --notify-line
           fi
-
