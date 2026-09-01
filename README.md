@@ -130,3 +130,9 @@ boatrace-api --db data/boatrace.sqlite3 --host 0.0.0.0 --port 8000
 - `GET /api/v1/races/YYYY-MM-DD/{場番号}/{レース番号}`
 
 分析APIは `Authorization: Bearer <BOATRACE_API_KEY>` を要求します。APIキーをブラウザーへ直書きせず、Manus側のサーバー機能から呼び出してください。許可する画面のURLは `BOATRACE_ALLOWED_ORIGINS` にカンマ区切りで指定します。APIをインターネットから利用するには、SQLiteを継続保存できるサーバーへの配置が別途必要です。
+
+現在のManus公開画面は `https://jarvisai-3nthr7cn.manus.space` です。サーバーAPIを配置する場合、このURLだけを `BOATRACE_ALLOWED_ORIGINS` に設定します。
+
+Manusから秘密情報なしで参照できる表示専用データとして、展示監視の実行後にGitHub Pagesへ `latest.json` を公開する構成も用意しています。内容は公開情報から作った分析結果のみで、LINEトークンやAPIキーは含みません。GitHubのSettings → PagesでSourceを「GitHub Actions」にすると、次のURLから取得できます。
+
+`https://ayatomidokoro-max.github.io/boatrace-ai/latest.json`
