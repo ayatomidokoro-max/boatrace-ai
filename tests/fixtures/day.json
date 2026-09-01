@@ -1,0 +1,16 @@
+{
+  "programs": {"stadiums": {"5": {"races": {"1": {
+    "date": "2026-09-01", "stadium_number": 5, "race_number": 1,
+    "closed_at": "2026-09-01 11:29:00", "grade_number_source": "一般",
+    "title": "テスト杯", "subtitle": "予選", "day_number": 1,
+    "racers": {
+      "1": {"entry_number": 1, "number": 1001, "name": "一号 太郎", "rank_number_source": "A1", "age": 30, "national_win_rate": 7.2, "national_top_2_percent": 54.0, "local_win_rate": 7.0, "average_start_timing": 0.13, "motor_top_2_percent": 42.0, "boat_top_2_percent": 38.0, "flying_count": 0},
+      "2": {"entry_number": 2, "number": 1002, "name": "二号 次郎", "rank_number_source": "A2", "age": 35, "national_win_rate": 6.0, "national_top_2_percent": 42.0, "local_win_rate": 5.9, "average_start_timing": 0.16, "motor_top_2_percent": 35.0, "boat_top_2_percent": 34.0, "flying_count": 0},
+      "3": {"entry_number": 3, "number": 1003, "name": "三号 三郎", "rank_number_source": "B1", "age": 40, "national_win_rate": 5.1, "national_top_2_percent": 31.0, "local_win_rate": 5.0, "average_start_timing": 0.18, "motor_top_2_percent": 33.0, "boat_top_2_percent": 32.0, "flying_count": 0},
+      "4": {"entry_number": 4, "number": 1004, "name": "四号 四郎", "rank_number_source": "A2", "age": 29, "national_win_rate": 6.6, "national_top_2_percent": 47.0, "local_win_rate": 6.8, "average_start_timing": 0.14, "motor_top_2_percent": 48.0, "boat_top_2_percent": 40.0, "flying_count": 0},
+      "5": {"entry_number": 5, "number": 1005, "name": "五号 五郎", "rank_number_source": "B1", "age": 45, "national_win_rate": 4.8, "national_top_2_percent": 28.0, "local_win_rate": 4.4, "average_start_timing": 0.19, "motor_top_2_percent": 30.0, "boat_top_2_percent": 31.0, "flying_count": 1},
+      "6": {"entry_number": 6, "number": 1006, "name": "六号 六郎", "rank_number_source": "B2", "age": 22, "national_win_rate": 3.8, "national_top_2_percent": 20.0, "local_win_rate": 3.5, "average_start_timing": 0.21, "motor_top_2_percent": 27.0, "boat_top_2_percent": 29.0, "flying_count": 0}
+    }
+  }}}}}
+}
+

@@ -1,0 +1,15 @@
+{
+  "note": "CLIが読み込む採点設定。weightsの合計は1.0。",
+  "min_confidence": 0.62,
+  "min_margin": 4.0,
+  "weights": {
+    "lane": 0.22,
+    "national_win_rate": 0.20,
+    "national_top2": 0.12,
+    "local_win_rate": 0.14,
+    "average_start_timing": 0.14,
+    "motor_top2": 0.10,
+    "boat_top2": 0.06,
+    "flying_count": 0.02
+  }
+}
