@@ -96,3 +96,37 @@ class Repository:
                 updated_at=excluded.updated_at""",
                 (race.race_date, race.stadium_number, race.race_number,
                  json.dumps(snapshot, ensure_ascii=False), signature))
+
+    def latest_run(self, race_date: str | None = None) -> dict | None:
+        query = """SELECT id,race_date,started_at,source_url,status,error FROM runs
+            WHERE status='completed'"""
+        params: tuple[object, ...] = ()
+        if race_date:
+            query += " AND race_date=?"
+            params = (race_date,)
+        query += " ORDER BY id DESC LIMIT 1"
+        with self.connect() as db:
+            db.row_factory = sqlite3.Row
+            row = db.execute(query, params).fetchone()
+        return dict(row) if row else None
+
+    def analyses_for_run(self, run_id: int) -> list[dict]:
+        with self.connect() as db:
+            db.row_factory = sqlite3.Row
+            rows = db.execute("""SELECT id,stadium_number,race_number,closed_at,decision,
+                favorite_lane,dark_horse_lane,confidence,data_completeness,trifectas_json,reasons_json
+                FROM analyses WHERE run_id=? ORDER BY stadium_number,race_number""", (run_id,)).fetchall()
+            results = []
+            for row in rows:
+                item = dict(row)
+                analysis_id = item.pop("id")
+                item["trifectas"] = json.loads(item.pop("trifectas_json"))
+                item["reasons"] = json.loads(item.pop("reasons_json"))
+                scores = db.execute("""SELECT lane,racer_number,racer_name,score,data_completeness,reasons_json
+                    FROM entrant_scores WHERE analysis_id=? ORDER BY lane""", (analysis_id,)).fetchall()
+                item["scores"] = [{**dict(score), "reasons": json.loads(score["reasons_json"])}
+                                  for score in scores]
+                for score in item["scores"]:
+                    score.pop("reasons_json")
+                results.append(item)
+        return results

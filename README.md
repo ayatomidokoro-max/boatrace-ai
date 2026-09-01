@@ -114,3 +114,19 @@ python -m boatrace_ai --db data/boatrace.sqlite3 --monitor-exhibition --notify-l
 ```
 
 GitHub上では「Exhibition monitor」が08:00〜21:50 JSTの間、10分間隔で展示監視を実行します。各実行は直近のSQLite状態をGitHub Actions artifactから復元し、実行後の状態を2日間保存します。重要変更がない場合はLINEを送らず、同じ変更の署名は再送しません。毎朝10時の通常通知も同じ状態を引き継ぎます。
+
+## J.A.R.V.I.S. / Manus向け参照専用API
+
+分析済みSQLiteを画面から安全に参照するためのAPIを同梱しています。自動投票やデータ更新機能はありません。
+
+```bash
+BOATRACE_API_KEY=十分に長いランダム文字列 \
+BOATRACE_ALLOWED_ORIGINS=https://あなたの画面のドメイン.example \
+boatrace-api --db data/boatrace.sqlite3 --host 0.0.0.0 --port 8000
+```
+
+- `GET /health`（認証不要）
+- `GET /api/v1/analyses?date=YYYY-MM-DD`
+- `GET /api/v1/races/YYYY-MM-DD/{場番号}/{レース番号}`
+
+分析APIは `Authorization: Bearer <BOATRACE_API_KEY>` を要求します。APIキーをブラウザーへ直書きせず、Manus側のサーバー機能から呼び出してください。許可する画面のURLは `BOATRACE_ALLOWED_ORIGINS` にカンマ区切りで指定します。APIをインターネットから利用するには、SQLiteを継続保存できるサーバーへの配置が別途必要です。
