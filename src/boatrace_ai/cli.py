@@ -8,6 +8,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from boatrace_ai.collectors import BoatraceOpenApiCollector, CollectionError
+from boatrace_ai.notifications import LineNotifier, NotificationError, format_line_message
 from boatrace_ai.service import run_analysis
 from boatrace_ai.storage import Repository
 
@@ -20,6 +21,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--config", default="config/scoring.json", help="採点設定JSON")
     p.add_argument("--min-confidence", type=float, default=0.62)
     p.add_argument("--min-margin", type=float, default=4.0)
+    p.add_argument("--notify-line", action="store_true", help="分析結果を個人LINEへ送信")
     return p
 
 
@@ -58,4 +60,11 @@ def main(argv: list[str] | None = None) -> int:
         path = Path(args.json_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps([a.to_dict() for a in analyses], ensure_ascii=False, indent=2), encoding="utf-8")
+    if args.notify_line:
+        try:
+            LineNotifier.from_environment().send(format_line_message(analyses, race_date.isoformat()))
+            print("LINE通知: 送信成功")
+        except NotificationError as exc:
+            print(f"LINE通知: {exc}", file=sys.stderr)
+            return 1
     return 0

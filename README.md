@@ -24,6 +24,23 @@ boatrace-ai --db data/boatrace.sqlite3 --json artifacts/latest.json
 python -m boatrace_ai --date 2026-09-01 --db data/boatrace.sqlite3
 ```
 
+### 個人LINEへ通知
+
+LINE Notifyは終了しているため、LINE公式アカウントのMessaging APIを使用します。個人LINEでその公式アカウントを友だち追加し、次の2つを環境変数またはGitHub Secretsへ登録します。
+
+- `LINE_CHANNEL_ACCESS_TOKEN`: Messaging APIのチャネルアクセストークン
+- `LINE_USER_ID`: 通知先となる自分のユーザーID（`U`から始まる値）
+
+秘密情報はコード、設定JSON、コマンド引数へ保存しないでください。
+
+```powershell
+$env:LINE_CHANNEL_ACCESS_TOKEN = "LINE Developersで取得した値"
+$env:LINE_USER_ID = "Uから始まる自分のID"
+.\.venv\Scripts\python.exe -m boatrace_ai --notify-line
+```
+
+GitHubではSettings → Secrets and variables → Actionsに同名のSecretを2件登録し、Actionsの「LINE notification」から手動実行できます。通知失敗時は自動投票などの代替動作を行わず、終了コード1で安全に終了します。
+
 重みは `config/scoring.json` で変更でき、`--config` で別設定も指定できます。8項目不足または合計が1.0でない設定は安全に拒否します。
 
 終了コードは成功 `0`、取得失敗 `1`、引数不正 `2` です。取得失敗はSQLiteの `runs` に失敗理由を保存し、未確認データを生成せず安全に終了します。

@@ -1,0 +1,33 @@
+name: LINE notification
+
+on:
+  workflow_dispatch:
+    inputs:
+      race_date:
+        description: "開催日 YYYY-MM-DD（空欄ならJST当日）"
+        required: false
+        type: string
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+      LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e .
+      - name: Analyze and send to LINE
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.race_date }}" ]; then
+            python -m boatrace_ai --date "${{ inputs.race_date }}" --notify-line
+          else
+            python -m boatrace_ai --notify-line
+          fi
+
