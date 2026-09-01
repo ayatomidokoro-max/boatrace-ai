@@ -1,26 +1,21 @@
-name: LINE notification
+name: Exhibition monitor
 
 on:
   schedule:
-    # GitHub ActionsのcronはUTC。01:00 UTC = 10:00 JST。
-    - cron: "0 1 * * *"
+    # 23:00〜12:50 UTC = 08:00〜21:50 JST。10分間隔。
+    - cron: "*/10 23,0-12 * * *"
   workflow_dispatch:
-    inputs:
-      race_date:
-        description: "開催日 YYYY-MM-DD（空欄ならJST当日）"
-        required: false
-        type: string
 
 jobs:
-  notify:
+  monitor:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    concurrency:
-      group: daily-line-notification
-      cancel-in-progress: false
     permissions:
       contents: read
       actions: read
+    concurrency:
+      group: exhibition-monitor
+      cancel-in-progress: false
     env:
       LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
       LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
@@ -41,14 +36,8 @@ jobs:
         with:
           python-version: "3.11"
       - run: python -m pip install -e .
-      - name: Analyze and send to LINE
-        shell: bash
-        run: |
-          if [ -n "${{ inputs.race_date }}" ]; then
-            python -m boatrace_ai --date "${{ inputs.race_date }}" --notify-line
-          else
-            python -m boatrace_ai --notify-line
-          fi
+      - name: Detect important exhibition changes
+        run: python -m boatrace_ai --db data/boatrace.sqlite3 --monitor-exhibition --notify-line
       - name: Save exhibition state
         uses: actions/upload-artifact@v4
         with:
@@ -56,3 +45,4 @@ jobs:
           path: data/boatrace.sqlite3
           retention-days: 2
           if-no-files-found: error
+

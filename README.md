@@ -113,4 +113,4 @@ tests/               # オフラインpytest
 python -m boatrace_ai --db data/boatrace.sqlite3 --monitor-exhibition --notify-line
 ```
 
-GitHub上の展示定期監視は、実行間でSQLite状態を安全に永続化する仕組みを追加してから有効化します。それまでは毎朝10時通知のみが自動実行されます。
+GitHub上では「Exhibition monitor」が08:00〜21:50 JSTの間、10分間隔で展示監視を実行します。各実行は直近のSQLite状態をGitHub Actions artifactから復元し、実行後の状態を2日間保存します。重要変更がない場合はLINEを送らず、同じ変更の署名は再送しません。毎朝10時の通常通知も同じ状態を引き継ぎます。
