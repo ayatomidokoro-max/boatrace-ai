@@ -46,6 +46,9 @@ CREATE TABLE IF NOT EXISTS race_results (
  recorded_at TEXT NOT NULL,
  PRIMARY KEY(race_date,stadium_number,race_number)
 );
+CREATE TABLE IF NOT EXISTS model_reports (
+ id INTEGER PRIMARY KEY, created_at TEXT NOT NULL, report_json TEXT NOT NULL
+);
 """
 
 
@@ -224,4 +227,24 @@ class Repository:
             "monthly": aggregate(lambda x: x["race_date"][:7]),
             "yearly": aggregate(lambda x: x["race_date"][:4]),
             "by_stadium": aggregate(lambda x: x["stadium_name"]),
-        }}
+        }, "model_evaluation": self.latest_model_report()}
+
+    def learning_rows(self) -> list[dict]:
+        with self.connect() as db:
+            db.row_factory = sqlite3.Row
+            rows = db.execute("""SELECT p.race_date,p.stadium_number,p.analysis_json,
+                r.result_places_json,r.result_trifecta,r.wind_speed,r.wave_height
+                FROM race_predictions p JOIN race_results r
+                USING(race_date,stadium_number,race_number)
+                ORDER BY p.race_date,p.stadium_number,p.race_number""").fetchall()
+        return [dict(row) for row in rows]
+
+    def save_model_report(self, report: dict) -> None:
+        with self.connect() as db:
+            db.execute("INSERT INTO model_reports(created_at,report_json) VALUES(datetime('now'),?)",
+                       (json.dumps(report, ensure_ascii=False),))
+
+    def latest_model_report(self) -> dict | None:
+        with self.connect() as db:
+            row = db.execute("SELECT report_json FROM model_reports ORDER BY id DESC LIMIT 1").fetchone()
+        return json.loads(row[0]) if row else None

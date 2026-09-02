@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 from boatrace_ai.collectors import BoatraceOpenApiCollector, CollectionError
 from boatrace_ai.notifications import LineNotifier, NotificationError, format_line_message
 from boatrace_ai.monitoring import collect_important_changes, format_change_message
+from boatrace_ai.learning import evaluate_model
 from boatrace_ai.service import run_analysis
 from boatrace_ai.storage import Repository
 
@@ -24,11 +25,22 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--min-margin", type=float, default=4.0)
     p.add_argument("--notify-line", action="store_true", help="分析結果を個人LINEへ送信")
     p.add_argument("--monitor-exhibition", action="store_true", help="展示後の重要変更だけを検出")
+    p.add_argument("--evaluate-model", action="store_true", help="履歴を時系列分割してモデルを検証")
+    p.add_argument("--learning-report", default="artifacts/learning-report.json", help="モデル検証レポート保存先")
     return p
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
+    if args.evaluate_model:
+        repository = Repository(args.db)
+        report = evaluate_model(repository)
+        repository.save_model_report(report)
+        report_path = Path(args.learning_report)
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"モデル検証: {report['status']} | 完了レース={report['completed_races']}")
+        return 0
     try:
         race_date = date.fromisoformat(args.race_date) if args.race_date else datetime.now(ZoneInfo("Asia/Tokyo")).date()
     except ValueError:
