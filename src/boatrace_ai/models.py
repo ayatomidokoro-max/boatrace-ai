@@ -41,6 +41,9 @@ class Race:
     wave_height: float | None = None
     air_temperature: float | None = None
     water_temperature: float | None = None
+    result_trifecta: str | None = None
+    trifecta_payout: int | None = None
+    result_places: list[int] = field(default_factory=list)
 
 
 @dataclass(slots=True)

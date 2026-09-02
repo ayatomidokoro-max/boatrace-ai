@@ -31,6 +31,21 @@ CREATE TABLE IF NOT EXISTS monitoring_states (
  updated_at TEXT NOT NULL,
  PRIMARY KEY(race_date, stadium_number, race_number)
 );
+CREATE TABLE IF NOT EXISTS race_predictions (
+ race_date TEXT NOT NULL, stadium_number INTEGER NOT NULL, race_number INTEGER NOT NULL,
+ stadium_name TEXT NOT NULL, predicted_at TEXT NOT NULL, closed_at TEXT,
+ decision TEXT NOT NULL, favorite_lane INTEGER, dark_horse_lane INTEGER,
+ confidence REAL NOT NULL, data_completeness REAL NOT NULL,
+ trifectas_json TEXT NOT NULL, analysis_json TEXT NOT NULL,
+ PRIMARY KEY(race_date,stadium_number,race_number)
+);
+CREATE TABLE IF NOT EXISTS race_results (
+ race_date TEXT NOT NULL, stadium_number INTEGER NOT NULL, race_number INTEGER NOT NULL,
+ result_trifecta TEXT NOT NULL, trifecta_payout INTEGER, result_places_json TEXT NOT NULL,
+ wind_speed REAL, wave_height REAL, air_temperature REAL, water_temperature REAL,
+ recorded_at TEXT NOT NULL,
+ PRIMARY KEY(race_date,stadium_number,race_number)
+);
 """
 
 
@@ -71,6 +86,36 @@ class Repository:
                 (analysis_id,lane,racer_number,racer_name,score,data_completeness,reasons_json)
                 VALUES(?,?,?,?,?,?,?)""", [(analysis_id, s.lane, s.racer_number, s.racer_name,
                 s.score, s.data_completeness, json.dumps(s.reasons, ensure_ascii=False)) for s in analysis.scores])
+            if race.result_trifecta is None:
+                db.execute("""INSERT INTO race_predictions
+                    (race_date,stadium_number,race_number,stadium_name,predicted_at,closed_at,
+                     decision,favorite_lane,dark_horse_lane,confidence,data_completeness,
+                     trifectas_json,analysis_json)
+                    VALUES(?,?,?,?,datetime('now'),?,?,?,?,?,?,?,?)
+                    ON CONFLICT(race_date,stadium_number,race_number) DO UPDATE SET
+                    stadium_name=excluded.stadium_name,predicted_at=excluded.predicted_at,
+                    closed_at=excluded.closed_at,decision=excluded.decision,
+                    favorite_lane=excluded.favorite_lane,dark_horse_lane=excluded.dark_horse_lane,
+                    confidence=excluded.confidence,data_completeness=excluded.data_completeness,
+                    trifectas_json=excluded.trifectas_json,analysis_json=excluded.analysis_json""",
+                    (race.race_date, race.stadium_number, race.race_number, race.stadium_name,
+                     race.closed_at, analysis.decision, analysis.favorite_lane, analysis.dark_horse_lane,
+                     analysis.confidence, analysis.data_completeness,
+                     json.dumps(analysis.trifectas, ensure_ascii=False),
+                     json.dumps(analysis.to_dict(), ensure_ascii=False)))
+            else:
+                db.execute("""INSERT INTO race_results
+                    (race_date,stadium_number,race_number,result_trifecta,trifecta_payout,
+                     result_places_json,wind_speed,wave_height,air_temperature,water_temperature,recorded_at)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,datetime('now'))
+                    ON CONFLICT(race_date,stadium_number,race_number) DO UPDATE SET
+                    result_trifecta=excluded.result_trifecta,trifecta_payout=excluded.trifecta_payout,
+                    result_places_json=excluded.result_places_json,wind_speed=excluded.wind_speed,
+                    wave_height=excluded.wave_height,air_temperature=excluded.air_temperature,
+                    water_temperature=excluded.water_temperature,recorded_at=excluded.recorded_at""",
+                    (race.race_date, race.stadium_number, race.race_number, race.result_trifecta,
+                     race.trifecta_payout, json.dumps(race.result_places), race.wind_speed,
+                     race.wave_height, race.air_temperature, race.water_temperature))
 
     def get_monitoring_state(self, race_date: str, stadium_number: int, race_number: int) -> dict | None:
         with self.connect() as db:
@@ -99,7 +144,7 @@ class Repository:
 
     def latest_run(self, race_date: str | None = None) -> dict | None:
         query = """SELECT id,race_date,started_at,source_url,status,error FROM runs
-            WHERE status='completed'"""
+            WHERE status IN ('success','completed')"""
         params: tuple[object, ...] = ()
         if race_date:
             query += " AND race_date=?"
@@ -130,3 +175,53 @@ class Repository:
                     score.pop("reasons_json")
                 results.append(item)
         return results
+
+    def performance_payload(self) -> dict:
+        with self.connect() as db:
+            db.row_factory = sqlite3.Row
+            rows = db.execute("""SELECT p.*,r.result_trifecta,r.trifecta_payout,
+                r.result_places_json,r.wind_speed,r.wave_height,r.air_temperature,r.water_temperature
+                FROM race_predictions p LEFT JOIN race_results r USING(race_date,stadium_number,race_number)
+                ORDER BY p.race_date DESC,p.stadium_number,p.race_number""").fetchall()
+        races = []
+        for row in rows:
+            item = dict(row)
+            trifectas = json.loads(item.pop("trifectas_json"))
+            item["trifectas"] = trifectas
+            item["analysis"] = json.loads(item.pop("analysis_json"))
+            result_places_json = item.pop("result_places_json")
+            item["result_places"] = json.loads(result_places_json) if result_places_json else []
+            if item["result_trifecta"] is None:
+                outcome, stake, returned = "未確定", 0, 0
+            elif item["decision"] != "買い候補":
+                outcome, stake, returned = "見送り", 0, 0
+            else:
+                hit = item["result_trifecta"] in trifectas
+                outcome = "的中" if hit else "不的中"
+                stake = 100 * len(trifectas)
+                returned = int(item["trifecta_payout"] or 0) if hit else 0
+            item.update({"outcome": outcome, "stake": stake, "return": returned})
+            races.append(item)
+
+        def aggregate(key):
+            groups: dict[str, dict] = {}
+            for item in races:
+                if item["outcome"] not in {"的中", "不的中"}:
+                    continue
+                label = key(item)
+                group = groups.setdefault(label, {"bets": 0, "hits": 0, "stake": 0, "return": 0})
+                group["bets"] += 1
+                group["hits"] += item["outcome"] == "的中"
+                group["stake"] += item["stake"]
+                group["return"] += item["return"]
+            for group in groups.values():
+                group["hit_rate"] = round(group["hits"] / group["bets"] * 100, 2) if group["bets"] else None
+                group["recovery_rate"] = round(group["return"] / group["stake"] * 100, 2) if group["stake"] else None
+            return groups
+
+        return {"races": races, "summary": {
+            "daily": aggregate(lambda x: x["race_date"]),
+            "monthly": aggregate(lambda x: x["race_date"][:7]),
+            "yearly": aggregate(lambda x: x["race_date"][:4]),
+            "by_stadium": aggregate(lambda x: x["stadium_name"]),
+        }}

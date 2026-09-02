@@ -127,6 +127,7 @@ boatrace-api --db data/boatrace.sqlite3 --host 0.0.0.0 --port 8000
 
 - `GET /health`（認証不要）
 - `GET /api/v1/analyses?date=YYYY-MM-DD`
+- `GET /api/v1/performance`（日別・月別・年別・場別成績）
 - `GET /api/v1/races/YYYY-MM-DD/{場番号}/{レース番号}`
 
 分析APIは `Authorization: Bearer <BOATRACE_API_KEY>` を要求します。APIキーをブラウザーへ直書きせず、Manus側のサーバー機能から呼び出してください。許可する画面のURLは `BOATRACE_ALLOWED_ORIGINS` にカンマ区切りで指定します。APIをインターネットから利用するには、SQLiteを継続保存できるサーバーへの配置が別途必要です。
@@ -136,3 +137,11 @@ boatrace-api --db data/boatrace.sqlite3 --host 0.0.0.0 --port 8000
 Manusから秘密情報なしで参照できる表示専用データとして、展示監視の実行後にGitHub Pagesへ `latest.json` を公開する構成も用意しています。内容は公開情報から作った分析結果のみで、LINEトークンやAPIキーは含みません。GitHubのSettings → PagesでSourceを「GitHub Actions」にすると、次のURLから取得できます。
 
 `https://ayatomidokoro-max.github.io/boatrace-ai/latest.json`
+
+### 的中結果と成績
+
+締切前に保存した最後の予想を固定し、結果公開後の3連単結果・払戻金と照合します。結果を見て予想を上書きすることはありません。各レースは `的中`、`不的中`、`見送り`、`未確定` のいずれかになり、100円×提示買い目数を投資額として回収率を計算します。
+
+`latest.json` には個別レース履歴と、日別・月別・年別・場別の的中率・回収率が含まれます。予想時点の選手データ、スコア、confidence、data_completeness、展示、風、波と、確定後の着順・3連単・払戻をSQLiteへ蓄積します。既存の過去データには締切前予想が保存されていないため、安全上さかのぼって的中判定せず、この機能の公開後から集計します。
+
+風・波は直前情報 `preview` を優先し、まだ展示前で存在しない場合は未取得とします。レース終了後は `result` の水面気象へ切り替えて補完します。取得元の非公式API自体に欠損や数分の反映遅延がある場合は、推測せず未取得のまま表示します。

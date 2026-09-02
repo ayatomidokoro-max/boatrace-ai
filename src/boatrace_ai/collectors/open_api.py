@@ -52,6 +52,7 @@ class BoatraceOpenApiCollector(Collector):
                 stadium_number = int(raw.get("stadium_number", stadium_key))
                 entrants = []
                 preview = raw.get("preview") or {}
+                result = raw.get("result") or {}
                 preview_racers = preview.get("racers") or {}
                 for lane_key, racer in raw.get("racers", {}).items():
                     exhibition = preview_racers.get(str(lane_key), preview_racers.get(lane_key, {}))
@@ -70,6 +71,15 @@ class BoatraceOpenApiCollector(Collector):
                         exhibition_start_timing=exhibition.get("start_timing"),
                         exhibition_course=exhibition.get("course_number"),
                     ))
+                payouts = (result.get("payouts") or {}).get("trifecta") or []
+                result_racers = result.get("racers") or {}
+                places = sorted(
+                    ((racer.get("place_number"), int(racer.get("entry_number", lane)))
+                     for lane, racer in result_racers.items() if racer.get("place_number") is not None),
+                    key=lambda item: item[0],
+                )
+                weather = preview if any(preview.get(key) is not None for key in
+                    ("wind_speed", "wave_height", "air_temperature", "water_temperature")) else result
                 races.append(Race(
                     race_date=raw.get("date", ""), stadium_number=stadium_number,
                     stadium_name=VENUES.get(stadium_number, f"場{stadium_number}"),
@@ -78,8 +88,11 @@ class BoatraceOpenApiCollector(Collector):
                     subtitle=raw.get("subtitle"), day_number=raw.get("day_number"),
                     entrants=sorted(entrants, key=lambda item: item.lane),
                     source_url=source_url, fetched_at=fetched_at,
-                    wind_speed=preview.get("wind_speed"), wave_height=preview.get("wave_height"),
-                    air_temperature=preview.get("air_temperature"),
-                    water_temperature=preview.get("water_temperature"),
+                    wind_speed=weather.get("wind_speed"), wave_height=weather.get("wave_height"),
+                    air_temperature=weather.get("air_temperature"),
+                    water_temperature=weather.get("water_temperature"),
+                    result_trifecta=payouts[0].get("combination") if payouts else None,
+                    trifecta_payout=payouts[0].get("amount") if payouts else None,
+                    result_places=[lane for _, lane in places],
                 ))
         return sorted(races, key=lambda race: (race.stadium_number, race.race_number))

@@ -62,7 +62,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.json_path:
         path = Path(args.json_path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps([a.to_dict() for a in analyses], ensure_ascii=False, indent=2), encoding="utf-8")
+        dashboard = repository.performance_payload()
+        dashboard["latest_analyses"] = [a.to_dict() for a in analyses]
+        dashboard["generated_at"] = datetime.now(ZoneInfo("Asia/Tokyo")).isoformat()
+        path.write_text(json.dumps(dashboard, ensure_ascii=False, indent=2), encoding="utf-8")
     changes = collect_important_changes(analyses, repository)
     if args.monitor_exhibition:
         print(f"展示監視: 重要変更{len(changes)}件")

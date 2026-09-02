@@ -61,6 +61,9 @@ def make_handler(repository: Repository, api_key: str | None, allowed_origins: s
                 race_date = parse_qs(parsed.query).get("date", [None])[0]
                 self._send(200, _payload(repository, race_date))
                 return
+            if parsed.path == "/api/v1/performance":
+                self._send(200, {"status": "ok", **repository.performance_payload()})
+                return
             if parsed.path.startswith("/api/v1/races/"):
                 parts = parsed.path.strip("/").split("/")
                 if len(parts) != 6:
