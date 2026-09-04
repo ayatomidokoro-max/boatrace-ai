@@ -233,7 +233,7 @@ class Repository:
         with self.connect() as db:
             db.row_factory = sqlite3.Row
             rows = db.execute("""SELECT p.race_date,p.stadium_number,p.analysis_json,
-                r.result_places_json,r.result_trifecta,r.wind_speed,r.wave_height
+                r.result_places_json,r.result_trifecta,r.trifecta_payout,r.wind_speed,r.wave_height
                 FROM race_predictions p JOIN race_results r
                 USING(race_date,stadium_number,race_number)
                 ORDER BY p.race_date,p.stadium_number,p.race_number""").fetchall()

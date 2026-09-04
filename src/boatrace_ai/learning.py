@@ -18,7 +18,7 @@ def _race_from_snapshot(snapshot: dict) -> Race:
 
 
 def _metrics(rows: list[dict], weights: dict[str, float]) -> dict:
-    winner_hits = trifecta_hits = evaluated = 0
+    winner_hits = trifecta_hits = evaluated = stake = returned = 0
     for row in rows:
         places = json.loads(row["result_places_json"])
         if len(places) < 3:
@@ -27,11 +27,17 @@ def _metrics(rows: list[dict], weights: dict[str, float]) -> dict:
         analysis = analyze_race(race, min_confidence=0.0, min_margin=0.0, weights=weights)
         evaluated += 1
         winner_hits += analysis.favorite_lane == places[0]
-        trifecta_hits += row["result_trifecta"] in analysis.trifectas
+        hit = row["result_trifecta"] in analysis.trifectas
+        trifecta_hits += hit
+        stake += 100 * len(analysis.trifectas)
+        returned += int(row.get("trifecta_payout") or 0) if hit else 0
     return {
         "races": evaluated,
         "winner_accuracy": round(winner_hits / evaluated, 4) if evaluated else None,
         "trifecta_hit_rate": round(trifecta_hits / evaluated, 4) if evaluated else None,
+        "stake": stake,
+        "return": returned,
+        "recovery_rate": round(returned / stake * 100, 2) if stake else None,
     }
 
 
@@ -67,23 +73,29 @@ def evaluate_model(repository: Repository, minimum_races: int = 200) -> dict:
     scored = []
     for weights in _candidates(WEIGHTS):
         metrics = _metrics(train, weights)
-        objective = (metrics["winner_accuracy"] or 0) * 0.65 + (metrics["trifecta_hit_rate"] or 0) * 0.35
+        # 回収率を主目的にしつつ、単発の高配当だけへ過適合しないよう上限を設け、
+        # 的中率も補助指標として残す。
+        recovery_score = min((metrics["recovery_rate"] or 0) / 100, 3.0) / 3.0
+        objective = recovery_score * 0.70 + (metrics["trifecta_hit_rate"] or 0) * 0.20 \
+                    + (metrics["winner_accuracy"] or 0) * 0.10
         scored.append((objective, weights, metrics))
     _, candidate_weights, candidate_train = max(scored, key=lambda item: item[0])
     candidate_validation = _metrics(validation, candidate_weights)
     winner_gain = (candidate_validation["winner_accuracy"] or 0) - (baseline_validation["winner_accuracy"] or 0)
     trifecta_gain = (candidate_validation["trifecta_hit_rate"] or 0) - (baseline_validation["trifecta_hit_rate"] or 0)
-    recommended = winner_gain >= 0.02 and trifecta_gain >= -0.01
+    recovery_gain = (candidate_validation["recovery_rate"] or 0) - (baseline_validation["recovery_rate"] or 0)
+    recommended = recovery_gain >= 10.0 and trifecta_gain >= -0.02
     report.update({
         "status": "candidate_recommended" if recommended else "keep_current",
-        "message": "検証用データでも改善を確認しました。人の確認後に採用できます。" if recommended
-                   else "検証用データで明確な改善がないため現行モデルを維持します。",
+        "message": "未使用期間でも回収率改善を確認しました。人の確認後に採用できます。" if recommended
+                   else "未使用期間で十分な回収率改善がないため現行モデルを維持します。",
         "train_races": len(train), "validation_races": len(validation),
         "baseline_train": baseline_train, "baseline_validation": baseline_validation,
         "candidate_weights": {key: round(value, 6) for key, value in candidate_weights.items()},
         "candidate_train": candidate_train, "candidate_validation": candidate_validation,
         "winner_accuracy_gain": round(winner_gain, 4),
         "trifecta_hit_rate_gain": round(trifecta_gain, 4),
+        "recovery_rate_gain_points": round(recovery_gain, 2),
         "auto_applied": False,
     })
     return report

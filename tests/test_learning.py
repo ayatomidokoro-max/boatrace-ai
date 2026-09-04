@@ -21,8 +21,12 @@ def test_metrics_rebuild_prediction_snapshot_without_future_result():
         "analysis_json": json.dumps(snapshot, ensure_ascii=False),
         "result_places_json": json.dumps([1, 2, 3, 4, 5, 6]),
         "result_trifecta": "1-2-3",
+        "trifecta_payout": 1800,
     }
     metrics = _metrics([row], WEIGHTS)
     assert metrics["races"] == 1
     assert metrics["winner_accuracy"] == 1.0
     assert metrics["trifecta_hit_rate"] == 1.0
+    assert metrics["stake"] == 600
+    assert metrics["return"] == 1800
+    assert metrics["recovery_rate"] == 300.0
