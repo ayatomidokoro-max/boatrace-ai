@@ -12,6 +12,7 @@ from boatrace_ai.notifications import LineNotifier, NotificationError, format_li
 from boatrace_ai.monitoring import collect_important_changes, format_change_message
 from boatrace_ai.learning import apply_model_policy, evaluate_model
 from boatrace_ai.service import run_analysis
+from boatrace_ai.recommendations import build_daily_recommendations
 from boatrace_ai.storage import Repository
 
 
@@ -79,6 +80,7 @@ def main(argv: list[str] | None = None) -> int:
         dashboard = repository.performance_payload()
         dashboard["latest_analyses"] = [a.to_dict() for a in analyses]
         dashboard["generated_at"] = datetime.now(ZoneInfo("Asia/Tokyo")).isoformat()
+        dashboard["recommendations"] = build_daily_recommendations(analyses)
         path.write_text(json.dumps(dashboard, ensure_ascii=False, indent=2), encoding="utf-8")
     changes = collect_important_changes(analyses, repository)
     if args.monitor_exhibition:

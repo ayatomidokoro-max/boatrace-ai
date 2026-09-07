@@ -162,3 +162,12 @@ python -m boatrace_ai --db data/boatrace.sqlite3 --evaluate-model
 ```
 
 レポートは `artifacts/learning-report.json` とSQLiteへ保存され、次回の画面用 `latest.json` の `model_evaluation` に含まれます。回収率を最優先にしますが、短期間の高配当1件へ過学習しないよう回収率スコアに上限を設け、時系列で分離した未使用期間と最低的中率条件でも確認します。適用・待機・維持・自動復元の状態もSQLiteへ記録され、展示監視と朝通知は現在有効な重みを自動的に使用します。
+
+## 本日の推奨6レース
+
+画面用 `latest.json` の `recommendations` に、締切前かつ買い候補のレースから次を最大3件ずつ出力します。基準を満たすレースが少ない場合は、無理に3件へ増やしません。
+
+- `confidence_top3`（本日の自信あり！）：confidence 60%、データ充足率25%、上位スコア差15%
+- `value_top3`（配当妙味あり！）：外枠穴候補と本命艇のスコア比55%、外枠度25%、confidence 20%
+
+現在の公開APIには事前オッズが含まれないため、配当妙味は実オッズではなくスコアによる推定です。`value_basis` は `odds_unavailable_score_proxy` とし、画面にも「オッズ未連携の推定」と表示します。結果確定済み・締切済みレースは推奨から除外します。
