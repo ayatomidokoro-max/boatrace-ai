@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 from boatrace_ai.collectors import BoatraceOpenApiCollector, CollectionError
 from boatrace_ai.notifications import LineNotifier, NotificationError, format_line_message
 from boatrace_ai.monitoring import collect_important_changes, format_change_message
-from boatrace_ai.learning import evaluate_model
+from boatrace_ai.learning import apply_model_policy, evaluate_model
 from boatrace_ai.service import run_analysis
 from boatrace_ai.storage import Repository
 
@@ -35,6 +35,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.evaluate_model:
         repository = Repository(args.db)
         report = evaluate_model(repository)
+        report = apply_model_policy(repository, report)
         repository.save_model_report(report)
         report_path = Path(args.learning_report)
         report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -49,10 +50,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         config_path = Path(args.config)
         config = json.loads(config_path.read_text(encoding="utf-8")) if config_path.exists() else {}
-        weights = config.get("weights")
-        if weights is not None and (set(weights) != {"lane", "national_win_rate", "national_top2", "local_win_rate", "average_start_timing", "motor_top2", "boat_top2", "flying_count"} or abs(sum(weights.values()) - 1.0) > 1e-6):
+        configured_weights = config.get("weights")
+        if configured_weights is not None and (set(configured_weights) != {"lane", "national_win_rate", "national_top2", "local_win_rate", "average_start_timing", "motor_top2", "boat_top2", "flying_count"} or abs(sum(configured_weights.values()) - 1.0) > 1e-6):
             raise ValueError("weightsは既定の8項目を持ち、合計1.0にしてください")
         repository = Repository(args.db)
+        weights = repository.active_weights() or configured_weights
         analyses = run_analysis(race_date, BoatraceOpenApiCollector(), repository,
                                 args.min_confidence, args.min_margin, weights)
     except (CollectionError, ValueError, json.JSONDecodeError) as exc:

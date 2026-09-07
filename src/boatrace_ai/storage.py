@@ -49,6 +49,9 @@ CREATE TABLE IF NOT EXISTS race_results (
 CREATE TABLE IF NOT EXISTS model_reports (
  id INTEGER PRIMARY KEY, created_at TEXT NOT NULL, report_json TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS model_policy (
+ id INTEGER PRIMARY KEY CHECK(id=1), state_json TEXT NOT NULL, updated_at TEXT NOT NULL
+);
 """
 
 
@@ -248,3 +251,19 @@ class Repository:
         with self.connect() as db:
             row = db.execute("SELECT report_json FROM model_reports ORDER BY id DESC LIMIT 1").fetchone()
         return json.loads(row[0]) if row else None
+
+    def get_model_policy(self) -> dict:
+        with self.connect() as db:
+            row = db.execute("SELECT state_json FROM model_policy WHERE id=1").fetchone()
+        return json.loads(row[0]) if row else {}
+
+    def save_model_policy(self, state: dict) -> None:
+        with self.connect() as db:
+            db.execute("""INSERT INTO model_policy(id,state_json,updated_at)
+                VALUES(1,?,datetime('now')) ON CONFLICT(id) DO UPDATE SET
+                state_json=excluded.state_json,updated_at=excluded.updated_at""",
+                (json.dumps(state, ensure_ascii=False),))
+
+    def active_weights(self) -> dict[str, float] | None:
+        weights = self.get_model_policy().get("active_weights")
+        return {key: float(value) for key, value in weights.items()} if weights else None
