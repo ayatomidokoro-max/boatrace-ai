@@ -102,12 +102,7 @@ class Repository:
                      decision,favorite_lane,dark_horse_lane,confidence,data_completeness,
                      trifectas_json,analysis_json)
                     VALUES(?,?,?,?,datetime('now'),?,?,?,?,?,?,?,?)
-                    ON CONFLICT(race_date,stadium_number,race_number) DO UPDATE SET
-                    stadium_name=excluded.stadium_name,predicted_at=excluded.predicted_at,
-                    closed_at=excluded.closed_at,decision=excluded.decision,
-                    favorite_lane=excluded.favorite_lane,dark_horse_lane=excluded.dark_horse_lane,
-                    confidence=excluded.confidence,data_completeness=excluded.data_completeness,
-                    trifectas_json=excluded.trifectas_json,analysis_json=excluded.analysis_json""",
+                    ON CONFLICT(race_date,stadium_number,race_number) DO NOTHING""",
                     (race.race_date, race.stadium_number, race.race_number, race.stadium_name,
                      race.closed_at, analysis.decision, analysis.favorite_lane, analysis.dark_horse_lane,
                      analysis.confidence, analysis.data_completeness,
@@ -210,7 +205,12 @@ class Repository:
                 outcome = "的中" if hit else "不的中"
                 stake = 100 * len(trifectas)
                 returned = int(item["trifecta_payout"] or 0) if hit else 0
-            item.update({"outcome": outcome, "stake": stake, "return": returned})
+            item.update({
+                "outcome": outcome,
+                "hit": True if outcome == "的中" else False if outcome == "不的中" else None,
+                "stake": stake,
+                "return": returned,
+            })
             races.append(item)
 
         def aggregate(key):

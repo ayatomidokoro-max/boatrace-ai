@@ -71,7 +71,7 @@ GitHubではSettings → Secrets and variables → Actionsに同名のSecretを2
 
 ## 保存内容
 
-SQLiteには `runs`（実行・取得元・日時・失敗理由）、`analyses`（レース判定・confidence・充足率・3連単）、`entrant_scores`（各艇スコア・理由）を保存します。取得URLとUTC取得日時も保持します。JSON出力にはレースメタデータと全理由が含まれます。
+SQLiteには `runs`（実行・取得元・日時・失敗理由）、`analyses`（レース判定・confidence・充足率・3連単）、`entrant_scores`（各艇スコア・理由）を保存します。画面に最初に公開した買い目は `race_predictions` に固定し、展示監視の再計算で上書きしません。結果判定と成績集計は、この固定した公開買い目を基準にします。取得URLとUTC取得日時も保持します。JSON出力にはレースメタデータと全理由が含まれます。
 
 ## 開発・テスト
 

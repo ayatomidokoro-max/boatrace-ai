@@ -47,6 +47,30 @@ def test_prediction_is_frozen_and_performance_is_aggregated(tmp_path):
     assert payload["summary"]["daily"]["2026-09-02"]["recovery_rate"] == 1800.0
 
 
+def test_first_published_prediction_is_not_overwritten(tmp_path):
+    from boatrace_ai.models import Race
+    repository = Repository(tmp_path / "frozen.sqlite3")
+    race = Race("2026-09-08", 7, "蒲郡", 2)
+    first_run = repository.start_run("2026-09-08", "morning", "source")
+    repository.save(first_run, _analysis(race, ["1-4-5"]))
+    repository.finish_run(first_run, "success")
+    later_run = repository.start_run("2026-09-08", "exhibition", "source")
+    repository.save(later_run, _analysis(race, ["1-2-3"]))
+    repository.finish_run(later_run, "success")
+
+    result_run = repository.start_run("2026-09-08", "result", "source")
+    repository.save(result_run, _analysis(Race(
+        "2026-09-08", 7, "蒲郡", 2,
+        result_trifecta="1-4-5", trifecta_payout=2530, result_places=[1, 4, 5],
+    )))
+    repository.finish_run(result_run, "success")
+
+    item = repository.performance_payload()["races"][0]
+    assert item["trifectas"] == ["1-4-5"]
+    assert item["outcome"] == "的中"
+    assert item["hit"] is True
+
+
 def test_notification_delivery_count(tmp_path):
     repository = Repository(tmp_path / "notifications.sqlite3")
     assert repository.notification_count("2026-09-08", "exhibition") == 0
