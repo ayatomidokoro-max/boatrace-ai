@@ -45,3 +45,13 @@ def test_prediction_is_frozen_and_performance_is_aggregated(tmp_path):
     assert race["return"] == 1800
     assert payload["summary"]["daily"]["2026-09-02"]["hit_rate"] == 100.0
     assert payload["summary"]["daily"]["2026-09-02"]["recovery_rate"] == 1800.0
+
+
+def test_notification_delivery_count(tmp_path):
+    repository = Repository(tmp_path / "notifications.sqlite3")
+    assert repository.notification_count("2026-09-08", "exhibition") == 0
+    repository.record_notification("2026-09-08", "exhibition")
+    repository.record_notification("2026-09-08", "exhibition")
+    repository.record_notification("2026-09-08", "morning")
+    assert repository.notification_count("2026-09-08", "exhibition") == 2
+    assert repository.notification_count("2026-09-08", "morning") == 1

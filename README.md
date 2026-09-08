@@ -39,7 +39,7 @@ $env:LINE_USER_ID = "Uから始まる自分のID"
 .\.venv\Scripts\python.exe -m boatrace_ai --notify-line
 ```
 
-GitHubではSettings → Secrets and variables → Actionsに同名のSecretを2件登録します。「LINE notification」は毎日10:00 JST（01:00 UTC）に自動実行され、手動実行も可能です。GitHub側の混雑により開始が数分以上遅れる場合があります。通知失敗時は自動投票などの代替動作を行わず、終了コード1で安全に終了します。
+GitHubではSettings → Secrets and variables → Actionsに同名のSecretを2件登録します。「LINE notification」は毎日10:00 JST（01:00 UTC）に自動実行され、手動実行も可能です。GitHub側の混雑により開始が数分以上遅れる場合があります。朝の通知を優先するため、展示通知は1日最大4通です。LINEの月間上限到達（HTTP 429）時も、SQLite保存とJ.A.R.V.I.S.向けJSON公開は止めません。その他の通知失敗は終了コード1で安全に終了します。
 
 重みは `config/scoring.json` で変更でき、`--config` で別設定も指定できます。8項目不足または合計が1.0でない設定は安全に拒否します。
 
@@ -113,7 +113,7 @@ tests/               # オフラインpytest
 python -m boatrace_ai --db data/boatrace.sqlite3 --monitor-exhibition --notify-line
 ```
 
-GitHub上では「Exhibition monitor」が08:00〜21:50 JSTの間、10分間隔で展示監視を実行します。各実行は直近のSQLite状態をGitHub Actions artifactから復元し、実行後の状態を2日間保存します。重要変更がない場合はLINEを送らず、同じ変更の署名は再送しません。毎朝10時の通常通知も同じ状態を引き継ぎます。
+GitHub上では「Exhibition monitor」が08:00〜21:50 JSTの間、10分間隔で展示監視を実行します。各実行は直近のSQLite状態をGitHub Actions artifactから復元し、実行後の状態を2日間保存します。重要変更がない場合はLINEを送らず、同じ変更の署名は再送しません。展示通知は1日最大4通に制限し、毎朝10時の通常通知を優先します。LINE上限到達中も分析データの保存と画面向け公開は継続します。
 
 ## J.A.R.V.I.S. / Manus向け参照専用API
 

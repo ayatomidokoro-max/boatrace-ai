@@ -8,7 +8,9 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from boatrace_ai.collectors import BoatraceOpenApiCollector, CollectionError
-from boatrace_ai.notifications import LineNotifier, NotificationError, format_line_message
+from boatrace_ai.notifications import (
+    LineNotifier, NotificationError, NotificationQuotaError, format_line_message,
+)
 from boatrace_ai.monitoring import collect_important_changes, format_change_message
 from boatrace_ai.learning import apply_model_policy, evaluate_model
 from boatrace_ai.service import run_analysis
@@ -85,11 +87,21 @@ def main(argv: list[str] | None = None) -> int:
     changes = collect_important_changes(analyses, repository)
     if args.monitor_exhibition:
         print(f"展示監視: 重要変更{len(changes)}件")
-    if args.notify_line and (not args.monitor_exhibition or changes):
+    exhibition_limit = 4
+    exhibition_count = repository.notification_count(race_date.isoformat(), "exhibition")
+    if args.notify_line and args.monitor_exhibition and changes and exhibition_count >= exhibition_limit:
+        print(f"LINE通知: 展示通知は本日{exhibition_limit}通に達したため送信しません")
+    elif args.notify_line and (not args.monitor_exhibition or changes):
         try:
             message = format_change_message(changes) if args.monitor_exhibition else format_line_message(analyses, race_date.isoformat())
             LineNotifier.from_environment().send(message)
+            repository.record_notification(
+                race_date.isoformat(), "exhibition" if args.monitor_exhibition else "morning"
+            )
             print("LINE通知: 送信成功")
+        except NotificationQuotaError as exc:
+            # LINEの上限到達で、予想JSON・SQLite・GitHub Pagesの更新まで止めない。
+            print(f"LINE通知: {exc}", file=sys.stderr)
         except NotificationError as exc:
             print(f"LINE通知: {exc}", file=sys.stderr)
             return 1

@@ -52,6 +52,10 @@ CREATE TABLE IF NOT EXISTS model_reports (
 CREATE TABLE IF NOT EXISTS model_policy (
  id INTEGER PRIMARY KEY CHECK(id=1), state_json TEXT NOT NULL, updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS notification_deliveries (
+ id INTEGER PRIMARY KEY, race_date TEXT NOT NULL, kind TEXT NOT NULL,
+ sent_at TEXT NOT NULL
+);
 """
 
 
@@ -267,3 +271,18 @@ class Repository:
     def active_weights(self) -> dict[str, float] | None:
         weights = self.get_model_policy().get("active_weights")
         return {key: float(value) for key, value in weights.items()} if weights else None
+
+    def notification_count(self, race_date: str, kind: str) -> int:
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT COUNT(*) FROM notification_deliveries WHERE race_date=? AND kind=?",
+                (race_date, kind),
+            ).fetchone()
+        return int(row[0])
+
+    def record_notification(self, race_date: str, kind: str) -> None:
+        with self.connect() as db:
+            db.execute(
+                "INSERT INTO notification_deliveries(race_date,kind,sent_at) VALUES(?,?,datetime('now'))",
+                (race_date, kind),
+            )

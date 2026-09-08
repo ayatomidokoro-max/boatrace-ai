@@ -15,6 +15,10 @@ class NotificationError(RuntimeError):
     """通知設定または送信に失敗した。秘密情報は例外文に含めない。"""
 
 
+class NotificationQuotaError(NotificationError):
+    """LINEの送信上限に達した。分析・公開処理は継続できる。"""
+
+
 def _top_candidates(analyses: list[RaceAnalysis]) -> tuple[RaceAnalysis | None, RaceAnalysis | None]:
     candidates = [item for item in analyses if item.decision == "買い候補"]
     favorite = max(candidates, key=lambda item: item.confidence, default=None)
@@ -105,7 +109,8 @@ class LineNotifier:
                 if status != 200:
                     raise NotificationError(f"LINE送信に失敗しました（HTTP {status}）")
         except HTTPError as exc:
+            if exc.code == 429:
+                raise NotificationQuotaError("LINEの月間送信上限に達したため送信を見送りました（HTTP 429）") from exc
             raise NotificationError(f"LINE送信に失敗しました（HTTP {exc.code}）") from exc
         except (URLError, TimeoutError) as exc:
             raise NotificationError("LINE送信に失敗しました（通信エラー）") from exc
-

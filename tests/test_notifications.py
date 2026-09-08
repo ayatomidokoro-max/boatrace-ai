@@ -1,9 +1,12 @@
 import json
 
 import pytest
+from urllib.error import HTTPError
 
 from boatrace_ai.collectors.open_api import BoatraceOpenApiCollector
-from boatrace_ai.notifications import LineNotifier, NotificationError, format_line_message
+from boatrace_ai.notifications import (
+    LineNotifier, NotificationError, NotificationQuotaError, format_line_message,
+)
 from boatrace_ai.scoring import analyze_race
 
 
@@ -38,6 +41,14 @@ def test_missing_credentials_are_rejected():
         LineNotifier("", "")
 
 
+def test_http_429_is_reported_as_quota_error():
+    def opener(request, timeout):
+        raise HTTPError(request.full_url, 429, "Too Many Requests", {}, None)
+
+    with pytest.raises(NotificationQuotaError):
+        LineNotifier("secret-token", "U123", opener=opener).send("test")
+
+
 def test_message_contains_candidate_and_disclaimer(fixture_payload):
     race = BoatraceOpenApiCollector.parse(fixture_payload)[0]
     analysis = analyze_race(race, min_confidence=0, min_margin=0)
@@ -45,4 +56,3 @@ def test_message_contains_candidate_and_disclaimer(fixture_payload):
     assert "本命候補" in text
     assert "多摩川 1R" in text
     assert "自動投票は行いません" in text
-
