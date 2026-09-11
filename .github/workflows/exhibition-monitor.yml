@@ -12,7 +12,7 @@ jobs:
     timeout-minutes: 10
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}
     permissions:
       contents: read
       actions: read
@@ -56,6 +56,16 @@ jobs:
           path: public
       - name: Publish dashboard data
         id: deployment
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+        with:
+          token: ${{ github.token }}
+      - name: Wait before Pages retry
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 15
+      - name: Retry dashboard publish
+        id: deployment_retry
+        if: steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@v4
         with:
           token: ${{ github.token }}
