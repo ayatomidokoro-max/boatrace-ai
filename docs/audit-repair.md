@@ -10,7 +10,7 @@ The existing records and baseline weights are preserved. This change repairs pro
 - Weight evaluation uses the saved live selection thresholds and a date-separated holdout. Automatic promotion is disabled while independent forward validation is absent. Existing active weights are retained.
 - Monitor and daily notification jobs share the same concurrency group to prevent restored database snapshots overwriting one another.
 
-Verification baseline: 27 tests passed before the change. The repaired suite adds deadline boundaries, unpublished/exported versions, snapshot preservation, missing coverage, live selection, official parsing and reconciliation provenance.
+Verification baseline: 27 tests passed before the change. The repaired suite (34 passing tests) adds deadline boundaries, unpublished/exported versions, snapshot preservation, missing coverage, live selection, official parsing and reconciliation provenance.
 
 Replay of the 2026-10-19 20:02 JST export (7,328 records, 2026-09-02 through 2026-10-19):
 

@@ -69,4 +69,6 @@ class RaceAnalysis:
     reasons: list[str]
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        return {**asdict(self),"confidence_kind":"heuristic_score_not_probability",
+                "hit_probability":None,"expected_value":None,"odds_status":"unavailable",
+                "coverage_basis":"7_base_3_exhibition_2_weather"}

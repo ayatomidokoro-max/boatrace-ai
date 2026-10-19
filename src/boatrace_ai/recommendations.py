@@ -76,7 +76,7 @@ def build_daily_recommendations(analyses: list[RaceAnalysis], now: datetime | No
     value_ranked.sort(key=lambda row: row[0], reverse=True)
     return {
         "generated_at": now.isoformat(),
-        "confidence_top3": [_card(item, score, reasons, "本日の自信あり！")
+        "confidence_top3": [_card(item, score, reasons, "本日の分析スコア上位")
                             for score, item, reasons in confident_ranked[:limit]],
         "value_top3": [_card(item, score, reasons, "配当妙味あり！（推定）")
                        for score, item, reasons in value_ranked[:limit]],
