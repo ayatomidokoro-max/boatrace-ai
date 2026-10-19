@@ -28,6 +28,8 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--min-margin", type=float, default=4.0)
     p.add_argument("--notify-line", action="store_true", help="分析結果を個人LINEへ送信")
     p.add_argument("--monitor-exhibition", action="store_true", help="展示後の重要変更だけを検出")
+    p.add_argument("--confirm-publication", metavar="JSON", help="配信成功後だけ、保存済み版の公開時刻を確定")
+    p.add_argument("--reconcile-results", type=int, default=0, metavar="LIMIT", help="公式未確定結果を上限件数まで照合")
     p.add_argument("--evaluate-model", action="store_true", help="履歴を時系列分割してモデルを検証")
     p.add_argument("--learning-report", default="artifacts/learning-report.json", help="モデル検証レポート保存先")
     return p
@@ -35,6 +37,16 @@ def parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
+    if args.confirm_publication:
+        payload = json.loads(Path(args.confirm_publication).read_text(encoding="utf8"))
+        repository = Repository(args.db)
+        repository.confirm_publication(payload)
+        return 0
+    if args.reconcile_results:
+        from boatrace_ai.results import reconcile
+        report = reconcile(Repository(args.db),limit=max(1,args.reconcile_results))
+        print(json.dumps(report,ensure_ascii=False))
+        return 0
     if args.evaluate_model:
         repository = Repository(args.db)
         report = evaluate_model(repository)
@@ -79,10 +91,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.json_path:
         path = Path(args.json_path)
         path.parent.mkdir(parents=True, exist_ok=True)
+        recommendations = build_daily_recommendations(analyses)
         dashboard = repository.performance_payload()
         dashboard["latest_analyses"] = [a.to_dict() for a in analyses]
         dashboard["generated_at"] = datetime.now(ZoneInfo("Asia/Tokyo")).isoformat()
-        dashboard["recommendations"] = build_daily_recommendations(analyses)
+        candidates = repository.publication_candidates(analyses)
+        dashboard["publication_candidate_ids"] = list(candidates.values())
+        dashboard["publication_status"] = "prepared_not_yet_confirmed"
+        for name in ("confidence_top3","value_top3"):
+            for card in recommendations.get(name,[]):
+                card["prediction_version"] = candidates.get((card["stadium_number"],card["race_number"]))
+        dashboard["recommendations"] = recommendations
         path.write_text(json.dumps(dashboard, ensure_ascii=False, indent=2), encoding="utf-8")
     changes = collect_important_changes(analyses, repository)
     if args.monitor_exhibition:

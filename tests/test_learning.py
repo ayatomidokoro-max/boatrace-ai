@@ -45,28 +45,17 @@ def _recommended_report(created_at: str):
     }
 
 
-def test_policy_activates_only_after_two_consecutive_recommendations(tmp_path):
+def test_repeated_overlapping_reports_cannot_promote_model(tmp_path):
     repository = Repository(tmp_path / "policy.sqlite3")
-    first = apply_model_policy(repository, _recommended_report("2026-09-01"))
-    assert first["policy_action"] == "waiting_confirmation_week"
-    assert repository.active_weights() is None
-
-    second = apply_model_policy(repository, _recommended_report("2026-09-08"))
-    assert second["policy_action"] == "activated"
-    assert second["auto_applied"] is True
-    assert repository.active_weights()["national_win_rate"] == WEIGHTS["national_win_rate"] + 0.01
+    for day in ("2026-09-01","2026-09-08"):
+        report = apply_model_policy(repository, _recommended_report(day))
+        assert report["policy_action"] == "maintained"
+        assert report["auto_applied"] is False
+        assert repository.active_weights() is None
 
 
-def test_policy_rolls_back_after_two_bad_weeks(tmp_path):
-    repository = Repository(tmp_path / "rollback.sqlite3")
-    apply_model_policy(repository, _recommended_report("2026-09-01"))
-    apply_model_policy(repository, _recommended_report("2026-09-08"))
-    bad = {
-        "created_at": "2026-09-15", "status": "keep_current",
-        "baseline_validation": {"recovery_rate": 90.0, "trifecta_hit_rate": 0.15},
-    }
-    assert apply_model_policy(repository, bad)["policy_action"] == "maintained"
-    bad["created_at"] = "2026-09-22"
-    rolled_back = apply_model_policy(repository, bad)
-    assert rolled_back["policy_action"] == "rolled_back"
+def test_policy_preserves_existing_active_weights(tmp_path):
+    repository = Repository(tmp_path / "policy.sqlite3")
+    repository.save_model_policy({"status":"active","active_weights":WEIGHTS})
+    apply_model_policy(repository,_recommended_report("2026-09-08"))
     assert repository.active_weights() == WEIGHTS

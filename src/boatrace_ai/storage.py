@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import hashlib
+from datetime import UTC, datetime
+from boatrace_ai.timing import eligibility
 from pathlib import Path
 
 from boatrace_ai.models import RaceAnalysis
@@ -52,6 +55,20 @@ CREATE TABLE IF NOT EXISTS model_reports (
 CREATE TABLE IF NOT EXISTS model_policy (
  id INTEGER PRIMARY KEY CHECK(id=1), state_json TEXT NOT NULL, updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS prediction_versions (
+ id INTEGER PRIMARY KEY, run_id INTEGER NOT NULL REFERENCES runs(id),
+ race_date TEXT NOT NULL, stadium_number INTEGER NOT NULL, race_number INTEGER NOT NULL,
+ predicted_at TEXT NOT NULL, fetched_at TEXT, stage TEXT NOT NULL,
+ model_version TEXT NOT NULL, selection_json TEXT NOT NULL, analysis_json TEXT NOT NULL,
+ published_at TEXT, recommendation_categories_json TEXT NOT NULL DEFAULT '[]',
+ UNIQUE(run_id,stadium_number,race_number)
+);
+CREATE INDEX IF NOT EXISTS prediction_versions_race ON prediction_versions(race_date,stadium_number,race_number);
+CREATE TABLE IF NOT EXISTS result_checks (
+ race_date TEXT NOT NULL, stadium_number INTEGER NOT NULL, race_number INTEGER NOT NULL,
+ status TEXT NOT NULL, checked_at TEXT NOT NULL, source_url TEXT NOT NULL, detail TEXT,
+ PRIMARY KEY(race_date,stadium_number,race_number)
+);
 CREATE TABLE IF NOT EXISTS notification_deliveries (
  id INTEGER PRIMARY KEY, race_date TEXT NOT NULL, kind TEXT NOT NULL,
  sent_at TEXT NOT NULL
@@ -80,7 +97,8 @@ class Repository:
         with self.connect() as db:
             db.execute("UPDATE runs SET status=?, error=? WHERE id=?", (status, error, run_id))
 
-    def save(self, run_id: int, analysis: RaceAnalysis) -> None:
+    def save(self, run_id: int, analysis: RaceAnalysis, *, selection: dict | None = None,
+             model_version: str = "baseline") -> None:
         race = analysis.race
         with self.connect() as db:
             cursor = db.execute("""INSERT INTO analyses
@@ -96,7 +114,16 @@ class Repository:
                 (analysis_id,lane,racer_number,racer_name,score,data_completeness,reasons_json)
                 VALUES(?,?,?,?,?,?,?)""", [(analysis_id, s.lane, s.racer_number, s.racer_name,
                 s.score, s.data_completeness, json.dumps(s.reasons, ensure_ascii=False)) for s in analysis.scores])
-            if race.result_trifecta is None:
+            if race.result_trifecta is None and not race.result_places:
+                stage = "post_exhibition" if len(race.entrants) == 6 and all(
+                    e.exhibition_time is not None for e in race.entrants) else "pre_exhibition"
+                db.execute("""INSERT INTO prediction_versions
+                    (run_id,race_date,stadium_number,race_number,predicted_at,fetched_at,
+                     stage,model_version,selection_json,analysis_json)
+                    VALUES(?,?,?,?,?,?,?,?,?,?)""", (run_id,race.race_date,race.stadium_number,
+                    race.race_number,datetime.now(UTC).isoformat(),race.fetched_at,stage,
+                    model_version,json.dumps(selection or {"min_confidence":0.62,"min_margin":4.0}),
+                    json.dumps(analysis.to_dict(),ensure_ascii=False)))
                 db.execute("""INSERT INTO race_predictions
                     (race_date,stadium_number,race_number,stadium_name,predicted_at,closed_at,
                      decision,favorite_lane,dark_horse_lane,confidence,data_completeness,
@@ -108,7 +135,7 @@ class Repository:
                      analysis.confidence, analysis.data_completeness,
                      json.dumps(analysis.trifectas, ensure_ascii=False),
                      json.dumps(analysis.to_dict(), ensure_ascii=False)))
-            else:
+            elif race.result_trifecta is not None:
                 db.execute("""INSERT INTO race_results
                     (race_date,stadium_number,race_number,result_trifecta,trifecta_payout,
                      result_places_json,wind_speed,wave_height,air_temperature,water_temperature,recorded_at)
@@ -117,7 +144,10 @@ class Repository:
                     result_trifecta=excluded.result_trifecta,trifecta_payout=excluded.trifecta_payout,
                     result_places_json=excluded.result_places_json,wind_speed=excluded.wind_speed,
                     wave_height=excluded.wave_height,air_temperature=excluded.air_temperature,
-                    water_temperature=excluded.water_temperature,recorded_at=excluded.recorded_at""",
+                    water_temperature=excluded.water_temperature,recorded_at=excluded.recorded_at
+                    WHERE NOT EXISTS (SELECT 1 FROM result_checks c WHERE
+                        c.race_date=excluded.race_date AND c.stadium_number=excluded.stadium_number
+                        AND c.race_number=excluded.race_number AND c.status='official_confirmed')""",
                     (race.race_date, race.stadium_number, race.race_number, race.result_trifecta,
                      race.trifecta_payout, json.dumps(race.result_places), race.wind_speed,
                      race.wave_height, race.air_temperature, race.water_temperature))
@@ -189,14 +219,56 @@ class Repository:
                 FROM race_predictions p LEFT JOIN race_results r USING(race_date,stadium_number,race_number)
                 ORDER BY p.race_date DESC,p.stadium_number,p.race_number""").fetchall()
         races = []
+        with self.connect() as db:
+            db.row_factory = sqlite3.Row
+            versions = db.execute("SELECT * FROM prediction_versions ORDER BY id").fetchall()
+            checks = {tuple(row[k] for k in ("race_date","stadium_number","race_number")):dict(row)
+                      for row in db.execute("SELECT * FROM result_checks")}
+        versioned_keys = set()
+        published = {}
+        for version in versions:
+            v = dict(version)
+            versioned_keys.add((v["race_date"],v["stadium_number"],v["race_number"]))
+            a = json.loads(v["analysis_json"])
+            if v["published_at"] and eligibility(v["published_at"],a["race"].get("closed_at")) == "eligible":
+                published[(v["race_date"],v["stadium_number"],v["race_number"])] = (v,a)
         for row in rows:
             item = dict(row)
+            key = (item["race_date"],item["stadium_number"],item["race_number"])
+            selected = published.get(key)
+            item.update({"prediction_version":None,"stage":"legacy_first_snapshot","selection":{
+                "min_confidence":0.62,"min_margin":4.0},"published_at":None})
+            if selected:
+                version, analysis = selected
+                for field in ("decision","favorite_lane","dark_horse_lane","confidence","data_completeness"):
+                    item[field] = analysis[field]
+                item["analysis_json"] = version["analysis_json"]
+                item["trifectas_json"] = json.dumps(analysis["trifectas"])
+                item["predicted_at"] = version["predicted_at"]
+                item["closed_at"] = analysis["race"].get("closed_at")
+                item.update({"prediction_version":version["id"],"stage":version["stage"],
+                    "published_at":version["published_at"],"model_version":version["model_version"],
+                    "selection":json.loads(version["selection_json"]),
+                    "recommendation_categories":json.loads(version["recommendation_categories_json"])})
+            item["evaluation_status"] = eligibility(item["published_at"] or item["predicted_at"],item["closed_at"])
+            if key in versioned_keys and selected is None:
+                item["evaluation_status"] = "unpublished_before_deadline"
+            check = checks.get(key,{})
+            item["result_status"] = check.get("status") or ("confirmed_secondary" if item["result_trifecta"] else "unfetched")
+            item["result_source_url"] = check.get("source_url")
+            item["odds_at_prediction"] = None
+            item["final_odds"] = None
+            item["expected_value"] = None
             trifectas = json.loads(item.pop("trifectas_json"))
             item["trifectas"] = trifectas
             item["analysis"] = json.loads(item.pop("analysis_json"))
             result_places_json = item.pop("result_places_json")
             item["result_places"] = json.loads(result_places_json) if result_places_json else []
-            if item["result_trifecta"] is None:
+            if item["evaluation_status"] != "eligible":
+                outcome, stake, returned = "評価除外", 0, 0
+            elif item["result_status"] == "cancelled":
+                outcome, stake, returned = "中止", 0, 0
+            elif item["result_trifecta"] is None:
                 outcome, stake, returned = "未確定", 0, 0
             elif item["decision"] != "買い候補":
                 outcome, stake, returned = "見送り", 0, 0
@@ -234,17 +306,55 @@ class Repository:
             "monthly": aggregate(lambda x: x["race_date"][:7]),
             "yearly": aggregate(lambda x: x["race_date"][:4]),
             "by_stadium": aggregate(lambda x: x["stadium_name"]),
-        }, "model_evaluation": self.latest_model_report()}
+        }, "model_evaluation": self.latest_model_report(),
+        "evaluation_policy": {"version":"deadline-published-v2","stake_per_ticket":100,
+            "basis":"latest_published_before_deadline_or_legacy_first",
+            "confidence_is_probability":False,"odds_status":"unavailable"},
+        "audit_counts": {"total":len(races),"excluded":sum(r["evaluation_status"]!="eligible" for r in races),
+            "unresolved":sum(r["result_trifecta"] is None and r["result_status"]!="cancelled" for r in races)}}
 
-    def learning_rows(self) -> list[dict]:
+    def publication_candidates(self, analyses: list[RaceAnalysis]) -> dict:
+        candidates = {}
+        with self.connect() as db:
+            for a in analyses:
+                r = a.race
+                row = db.execute("""SELECT id,analysis_json FROM prediction_versions WHERE race_date=?
+                    AND stadium_number=? AND race_number=? ORDER BY id DESC LIMIT 1""",
+                    (r.race_date,r.stadium_number,r.race_number)).fetchone()
+                if row and json.loads(row[1]) == a.to_dict():
+                    candidates[(r.stadium_number,r.race_number)] = row[0]
+        return candidates
+
+    def confirm_publication(self, payload: dict) -> None:
+        """Called only after successful deployment; publication cannot be backdated."""
+        allowed = {json.dumps(a,sort_keys=True) for a in payload["latest_analyses"]}
+        ids = set(payload.get("publication_candidate_ids",[]))
         with self.connect() as db:
             db.row_factory = sqlite3.Row
-            rows = db.execute("""SELECT p.race_date,p.stadium_number,p.analysis_json,
-                r.result_places_json,r.result_trifecta,r.trifecta_payout,r.wind_speed,r.wave_height
-                FROM race_predictions p JOIN race_results r
-                USING(race_date,stadium_number,race_number)
-                ORDER BY p.race_date,p.stadium_number,p.race_number""").fetchall()
-        return [dict(row) for row in rows]
+            for row in db.execute("SELECT * FROM prediction_versions WHERE published_at IS NULL").fetchall():
+                if row["id"] not in ids or json.dumps(json.loads(row["analysis_json"]),sort_keys=True) not in allowed:
+                    continue
+                categories = [name for name in ("confidence_top3","value_top3") if any(
+                    card.get("prediction_version")==row["id"] for card in payload["recommendations"].get(name,[]))]
+                db.execute("UPDATE prediction_versions SET published_at=?,recommendation_categories_json=? WHERE id=?",
+                           (datetime.now(UTC).isoformat(),json.dumps(categories),row["id"]))
+
+    def publish_predictions(self, analyses: list[RaceAnalysis], recommendations: dict) -> None:
+        candidates = self.publication_candidates(analyses)
+        for name in ("confidence_top3","value_top3"):
+            for card in recommendations.get(name,[]):
+                card["prediction_version"] = candidates.get((card["stadium_number"],card["race_number"]))
+        self.confirm_publication({"latest_analyses":[a.to_dict() for a in analyses],
+            "publication_candidate_ids":list(candidates.values()),"recommendations":recommendations})
+
+    def learning_rows(self) -> list[dict]:
+        rows = []
+        for item in self.performance_payload()["races"]:
+            if item["evaluation_status"] != "eligible" or len(item["result_places"]) < 3:
+                continue
+            rows.append({**item,"analysis_json":json.dumps(item["analysis"]),
+                         "result_places_json":json.dumps(item["result_places"])})
+        return sorted(rows,key=lambda x:(x["race_date"],x["stadium_number"],x["race_number"]))
 
     def save_model_report(self, report: dict) -> None:
         with self.connect() as db:

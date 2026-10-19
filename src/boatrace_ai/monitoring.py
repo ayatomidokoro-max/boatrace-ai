@@ -68,7 +68,7 @@ def format_change_message(changes: list[ImportantChange]) -> str:
             "",
             f"{item.race.stadium_name} {item.race.race_number}R",
             " / ".join(change.reasons),
-            f"本命 {item.favorite_lane}号艇｜穴 {item.dark_horse_lane}号艇｜信頼度 {item.confidence:.1%}",
+            f"本命 {item.favorite_lane}号艇｜穴 {item.dark_horse_lane}号艇｜分析スコア（確率ではありません） {item.confidence*100:.1f}/100",
             f"3連単 {', '.join(item.trifectas) or 'なし'}",
         ])
     lines.extend(["", "※重要変更があったレースのみ通知。自動投票は行いません。"])

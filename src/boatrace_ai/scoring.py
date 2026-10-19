@@ -82,5 +82,11 @@ def analyze_race(race: Race, min_confidence: float = 0.62, min_margin: float = 4
     top_lanes = [s.lane for s in scores[:4]]
     trifectas = ["-".join(map(str, combo)) for combo in permutations(top_lanes, 3)
                  if combo[0] == favorite][:6]
-    return RaceAnalysis(race, scores, confidence, round(completeness, 3), decision,
+    # Coverage includes exhibition and weather; the heuristic score retains its original
+    # base-feature formula so this audit repair does not silently retune selections.
+    entrant_coverage = sum(sum(getattr(e,name) is not None for name in FEATURES + (
+        "exhibition_time","exhibition_start_timing","exhibition_course")) for e in race.entrants)
+    coverage = (entrant_coverage + 6 * sum(getattr(race,name) is not None for name in (
+        "wind_speed","wave_height"))) / 72 if len(race.entrants)==6 else 0.0
+    return RaceAnalysis(race, scores, confidence, round(coverage, 3), decision,
                         favorite, dark_horse, trifectas, reasons)
