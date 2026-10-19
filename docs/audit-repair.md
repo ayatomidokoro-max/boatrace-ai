@@ -10,7 +10,7 @@ The existing records and baseline weights are preserved. This change repairs pro
 - Weight evaluation uses the saved live selection thresholds and a date-separated holdout. Automatic promotion is disabled while independent forward validation is absent. Existing active weights are retained.
 - Monitor and daily notification jobs share the same concurrency group to prevent restored database snapshots overwriting one another.
 
-Verification baseline: 27 tests passed before the change. The repaired suite (34 passing tests) adds deadline boundaries, unpublished/exported versions, snapshot preservation, missing coverage, live selection, official parsing and reconciliation provenance.
+Verification baseline: 27 tests passed before the change. The repaired suite (35 passing tests) adds deadline boundaries, unpublished/exported versions, snapshot preservation, missing coverage, live selection, official parsing and reconciliation provenance.
 
 Replay of the 2026-10-19 20:02 JST export (7,328 records, 2026-09-02 through 2026-10-19):
 
@@ -22,3 +22,5 @@ Replay of the 2026-10-19 20:02 JST export (7,328 records, 2026-09-02 through 202
 All 831 after-deadline records remain stored; 512 had previously entered the buy-candidate aggregate. Stakes are simulated at 100 JPY per ticket, not actual purchases. The 504 unresolved records included 492 from earlier days; the first bounded official reconciliation recovered 8/8 on a local replay copy. Remaining historical completion depends on subsequent monitor runs.
 
 Recovery: before-change Git bundles and the original exported JSON were retained outside the checkout. Reverting code does not remove the additive version/result-check tables or original history.
+
+Source pushes to main also refresh the existing Pages route without sending notifications. Scheduled notifications keep their existing cadence. Final race weather now prefers the completed result over preview weather.
