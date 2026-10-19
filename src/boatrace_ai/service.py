@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import json
+from boatrace_ai.scoring import WEIGHTS
 from datetime import UTC, date, datetime
 
 from boatrace_ai.collectors.base import Collector
@@ -15,7 +18,8 @@ def run_analysis(race_date: date, collector: Collector, repository: Repository,
     try:
         analyses = [analyze_race(race, min_confidence, min_margin, weights) for race in collector.collect(race_date)]
         for analysis in analyses:
-            repository.save(run_id, analysis)
+            repository.save(run_id, analysis, selection={"min_confidence":min_confidence,"min_margin":min_margin},
+                model_version=hashlib.sha256(json.dumps(weights or WEIGHTS,sort_keys=True).encode()).hexdigest()[:16])
         repository.finish_run(run_id, "success")
         return analyses
     except Exception as exc:

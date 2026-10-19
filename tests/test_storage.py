@@ -38,6 +38,10 @@ def test_prediction_is_frozen_and_performance_is_aggregated(tmp_path):
         result_trifecta="1-2-3", trifecta_payout=1800, result_places=[1, 2, 3])))
     repository.finish_run(result_run, "success")
 
+    # Legacy snapshot fixture, not a newly generated unpublished prediction.
+    with repository.connect() as db:
+        db.execute("DELETE FROM prediction_versions")
+        db.execute("UPDATE race_predictions SET predicted_at='2026-09-02 00:00:00',closed_at='2026-09-02 12:00:00'")
     payload = repository.performance_payload()
     race = payload["races"][0]
     assert race["outcome"] == "的中"
@@ -50,7 +54,7 @@ def test_prediction_is_frozen_and_performance_is_aggregated(tmp_path):
 def test_first_published_prediction_is_not_overwritten(tmp_path):
     from boatrace_ai.models import Race
     repository = Repository(tmp_path / "frozen.sqlite3")
-    race = Race("2026-09-08", 7, "蒲郡", 2)
+    race = Race("2026-09-08", 7, "蒲郡", 2, closed_at="2026-09-08 12:00:00")
     first_run = repository.start_run("2026-09-08", "morning", "source")
     repository.save(first_run, _analysis(race, ["1-4-5"]))
     repository.finish_run(first_run, "success")
@@ -65,6 +69,9 @@ def test_first_published_prediction_is_not_overwritten(tmp_path):
     )))
     repository.finish_run(result_run, "success")
 
+    with repository.connect() as db:
+        db.execute("DELETE FROM prediction_versions")
+        db.execute("UPDATE race_predictions SET predicted_at='2026-09-08 00:00:00'")
     item = repository.performance_payload()["races"][0]
     assert item["trifectas"] == ["1-4-5"]
     assert item["outcome"] == "的中"

@@ -78,8 +78,8 @@ class BoatraceOpenApiCollector(Collector):
                      for lane, racer in result_racers.items() if racer.get("place_number") is not None),
                     key=lambda item: item[0],
                 )
-                weather = preview if any(preview.get(key) is not None for key in
-                    ("wind_speed", "wave_height", "air_temperature", "water_temperature")) else result
+                # Completed-race weather must come from the result, not the earlier preview.
+                weather = result if payouts else preview
                 races.append(Race(
                     race_date=raw.get("date", ""), stadium_number=stadium_number,
                     stadium_name=VENUES.get(stadium_number, f"場{stadium_number}"),

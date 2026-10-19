@@ -49,7 +49,7 @@ def format_line_message(analyses: list[RaceAnalysis], race_date: str) -> str:
         "",
         "■ 本命候補",
         f"{race.stadium_name} {race.race_number}R｜{favorite.favorite_lane}号艇",
-        f"信頼度 {favorite.confidence:.1%}｜充足率 {favorite.data_completeness:.1%}",
+        f"分析スコア（確率ではありません） {favorite.confidence*100:.1f}/100｜充足率 {favorite.data_completeness:.1%}",
         f"3連単候補 {', '.join(favorite.trifectas) or 'なし'}",
     ])
     if dark is not None:
@@ -58,7 +58,7 @@ def format_line_message(analyses: list[RaceAnalysis], race_date: str) -> str:
             "",
             "■ 穴候補",
             f"{race.stadium_name} {race.race_number}R｜{dark.dark_horse_lane}号艇",
-            f"信頼度 {dark.confidence:.1%}｜充足率 {dark.data_completeness:.1%}",
+            f"分析スコア（確率ではありません） {dark.confidence*100:.1f}/100｜充足率 {dark.data_completeness:.1%}",
         ])
     lines.extend(["", "※自動投票は行いません。最終確認はBOAT RACE公式で行ってください。"])
     return "\n".join(lines)

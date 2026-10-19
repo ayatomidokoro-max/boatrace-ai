@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     concurrency:
-      group: daily-line-notification
+      group: exhibition-monitor
       cancel-in-progress: false
     permissions:
       contents: read

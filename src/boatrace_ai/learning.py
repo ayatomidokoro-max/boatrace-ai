@@ -24,7 +24,12 @@ def _metrics(rows: list[dict], weights: dict[str, float]) -> dict:
         if len(places) < 3:
             continue
         race = _race_from_snapshot(json.loads(row["analysis_json"]))
-        analysis = analyze_race(race, min_confidence=0.0, min_margin=0.0, weights=weights)
+        if race.result_trifecta is not None:
+            continue
+        selection = row.get("selection") or {"min_confidence":0.62,"min_margin":4.0}
+        analysis = analyze_race(race, weights=weights, **selection)
+        if analysis.decision != "買い候補":
+            continue
         evaluated += 1
         winner_hits += analysis.favorite_lane == places[0]
         hit = row["result_trifecta"] in analysis.trifectas
@@ -67,8 +72,15 @@ def evaluate_model(repository: Repository, minimum_races: int = 200) -> dict:
         report["remaining_races"] = minimum_races - completed
         return report
 
-    split = max(1, int(completed * 0.8))
-    train, validation = rows[:split], rows[split:]
+    dates = sorted({row["race_date"] for row in rows})
+    if len(dates) < 2:
+        report["message"] = "日付を分離できるまで評価を保留します。"
+        return report
+    cutoff = dates[max(1,int(len(dates)*0.8))]
+    train = [row for row in rows if row["race_date"] < cutoff]
+    validation = [row for row in rows if row["race_date"] >= cutoff]
+    report["validation_start_date"] = cutoff
+    report["evaluation_policy"] = "published-before-deadline/same-live-selection/date-holdout-v2"
     baseline_train = _metrics(train, baseline_weights)
     baseline_validation = _metrics(validation, baseline_weights)
     scored = []
@@ -104,56 +116,12 @@ def evaluate_model(repository: Repository, minimum_races: int = 200) -> dict:
 
 def apply_model_policy(repository: Repository, report: dict, required_streak: int = 2,
                        rollback_streak: int = 2) -> dict:
-    """連続検証を通った候補だけを有効化し、悪化が続けば直前へ戻す。"""
+    """Keep the existing model. Repeated, overlapping holdouts cannot authorize promotion."""
     state = repository.get_model_policy()
-    active = state.get("active_weights") or dict(WEIGHTS)
-    state.setdefault("status", "baseline")
-    state.setdefault("pending_streak", 0)
-    state.setdefault("bad_streak", 0)
-    action = "maintained"
-
-    current_validation = report.get("baseline_validation") or {}
-    activation = state.get("activation_validation") or {}
-    if state.get("status") == "active" and activation and current_validation:
-        recovery_drop = (activation.get("recovery_rate") or 0) - (current_validation.get("recovery_rate") or 0)
-        hit_drop = (activation.get("trifecta_hit_rate") or 0) - (current_validation.get("trifecta_hit_rate") or 0)
-        state["bad_streak"] = state["bad_streak"] + 1 if recovery_drop >= 15.0 or hit_drop > 0.03 else 0
-        if state["bad_streak"] >= rollback_streak and state.get("previous_weights"):
-            failed_weights = active
-            state["active_weights"] = state["previous_weights"]
-            state["previous_weights"] = failed_weights
-            state["status"] = "rolled_back"
-            state["bad_streak"] = 0
-            state["pending_streak"] = 0
-            action = "rolled_back"
-
-    if action != "rolled_back":
-        if report.get("status") == "candidate_recommended":
-            state["pending_streak"] += 1
-            state["pending_candidate"] = report["candidate_weights"]
-            action = "waiting_confirmation_week" if state["pending_streak"] < required_streak else "activated"
-            if state["pending_streak"] >= required_streak:
-                state["previous_weights"] = active
-                state["active_weights"] = report["candidate_weights"]
-                state["activation_validation"] = report["candidate_validation"]
-                state["activated_at"] = report["created_at"]
-                state["status"] = "active"
-                state["pending_streak"] = 0
-                state["bad_streak"] = 0
-        else:
-            state["pending_streak"] = 0
-            state.pop("pending_candidate", None)
-
-    state["last_action"] = action
+    state.setdefault("status","baseline")
+    state["last_action"] = "maintained"
     state["last_evaluated_at"] = report["created_at"]
+    state["promotion_policy"] = "disabled_pending_independent_forward_validation"
     repository.save_model_policy(state)
-    report["auto_applied"] = action == "activated"
-    report["policy_action"] = action
-    report["model_policy"] = state
-    if action == "activated":
-        report["message"] = "2週連続で改善を確認したため、新しい重みを自動適用しました。"
-    elif action == "rolled_back":
-        report["message"] = "適用後の悪化が2週続いたため、直前の重みへ自動で戻しました。"
-    elif action == "waiting_confirmation_week":
-        report["message"] = "改善候補を確認しました。次週も基準を満たせば自動適用します。"
+    report.update(auto_applied=False,policy_action="maintained",model_policy=state)
     return report

@@ -35,3 +35,10 @@ def test_result_weather_and_trifecta_are_used_when_preview_is_missing():
     assert race.result_trifecta == "3-1-5"
     assert race.trifecta_payout == 2040
     assert race.result_places == [3, 1, 5]
+
+
+def test_completed_weather_does_not_reuse_preview_weather(fixture_payload):
+    raw=fixture_payload["programs"]["stadiums"]["5"]["races"]["1"]
+    raw["preview"]["air_temperature"]=28.0
+    raw["result"]={"air_temperature":27.0,"payouts":{"trifecta":[{"combination":"1-2-3","amount":1000}]}}
+    assert BoatraceOpenApiCollector.parse(fixture_payload)[0].air_temperature==27.0
