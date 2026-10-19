@@ -4,6 +4,7 @@ import hashlib
 from dataclasses import dataclass
 from datetime import datetime
 
+from boatrace_ai.timing import JST
 from boatrace_ai.models import RaceAnalysis
 from boatrace_ai.storage import Repository
 
@@ -61,7 +62,7 @@ def collect_important_changes(analyses: list[RaceAnalysis], repository: Reposito
 
 
 def format_change_message(changes: list[ImportantChange]) -> str:
-    lines = [f"【展示後の重要変更 {datetime.now():%Y-%m-%d %H:%M}】"]
+    lines = [f"【展示後の重要変更 {datetime.now(JST):%Y-%m-%d %H:%M JST}】"]
     for change in changes[:8]:
         item = change.analysis
         lines.extend([

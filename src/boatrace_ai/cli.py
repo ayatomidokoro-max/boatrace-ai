@@ -5,7 +5,7 @@ import json
 import sys
 from datetime import date, datetime
 from pathlib import Path
-from zoneinfo import ZoneInfo
+from boatrace_ai.timing import JST
 
 from boatrace_ai.collectors import BoatraceOpenApiCollector, CollectionError
 from boatrace_ai.notifications import (
@@ -58,7 +58,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"モデル検証: {report['status']} | 完了レース={report['completed_races']}")
         return 0
     try:
-        race_date = date.fromisoformat(args.race_date) if args.race_date else datetime.now(ZoneInfo("Asia/Tokyo")).date()
+        race_date = date.fromisoformat(args.race_date) if args.race_date else datetime.now(JST).date()
     except ValueError:
         print("日付は YYYY-MM-DD 形式で指定してください", file=sys.stderr)
         return 2
@@ -94,7 +94,7 @@ def main(argv: list[str] | None = None) -> int:
         recommendations = build_daily_recommendations(analyses)
         dashboard = repository.performance_payload()
         dashboard["latest_analyses"] = [a.to_dict() for a in analyses]
-        dashboard["generated_at"] = datetime.now(ZoneInfo("Asia/Tokyo")).isoformat()
+        dashboard["generated_at"] = datetime.now(JST).isoformat()
         candidates = repository.publication_candidates(analyses)
         dashboard["publication_candidate_ids"] = list(candidates.values())
         dashboard["publication_status"] = "prepared_not_yet_confirmed"
