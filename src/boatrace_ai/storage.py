@@ -55,6 +55,11 @@ CREATE TABLE IF NOT EXISTS model_reports (
 CREATE TABLE IF NOT EXISTS model_policy (
  id INTEGER PRIMARY KEY CHECK(id=1), state_json TEXT NOT NULL, updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS audit_migrations (version INTEGER PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS legacy_prediction_keys (
+ race_date TEXT NOT NULL, stadium_number INTEGER NOT NULL, race_number INTEGER NOT NULL,
+ PRIMARY KEY(race_date,stadium_number,race_number)
+);
 CREATE TABLE IF NOT EXISTS prediction_versions (
  id INTEGER PRIMARY KEY, run_id INTEGER NOT NULL REFERENCES runs(id),
  race_date TEXT NOT NULL, stadium_number INTEGER NOT NULL, race_number INTEGER NOT NULL,
@@ -85,6 +90,10 @@ class Repository:
         connection = sqlite3.connect(self.path)
         connection.execute("PRAGMA foreign_keys=ON")
         connection.executescript(SCHEMA)
+        with connection:
+            if not connection.execute("SELECT 1 FROM audit_migrations WHERE version=1").fetchone():
+                connection.execute("INSERT OR IGNORE INTO legacy_prediction_keys SELECT race_date,stadium_number,race_number FROM race_predictions")
+                connection.execute("INSERT INTO audit_migrations VALUES(1)")
         return connection
 
     def start_run(self, race_date: str, started_at: str, source_url: str) -> int:
@@ -221,6 +230,7 @@ class Repository:
         races = []
         with self.connect() as db:
             db.row_factory = sqlite3.Row
+            legacy_keys = set(map(tuple,db.execute("SELECT * FROM legacy_prediction_keys")))
             versions = db.execute("SELECT * FROM prediction_versions ORDER BY id").fetchall()
             checks = {tuple(row[k] for k in ("race_date","stadium_number","race_number")):dict(row)
                       for row in db.execute("SELECT * FROM result_checks")}
@@ -251,7 +261,7 @@ class Repository:
                     "selection":json.loads(version["selection_json"]),
                     "recommendation_categories":json.loads(version["recommendation_categories_json"])})
             item["evaluation_status"] = eligibility(item["published_at"] or item["predicted_at"],item["closed_at"])
-            if key in versioned_keys and selected is None:
+            if key in versioned_keys and key not in legacy_keys and selected is None:
                 item["evaluation_status"] = "unpublished_before_deadline"
             check = checks.get(key,{})
             item["result_status"] = check.get("status") or ("confirmed_secondary" if item["result_trifecta"] else "unfetched")

@@ -50,6 +50,22 @@ def test_missing_exhibition_and_weather_cannot_be_full_coverage():
     assert analysis.confidence > analysis.data_completeness
 
 
+def test_late_new_version_does_not_erase_valid_legacy_evidence(tmp_path):
+    repo=Repository(tmp_path/'legacy.sqlite3')
+    race=Race('2026-01-01',1,'test',1,closed_at='2026-01-01 12:00:00')
+    analysis=analyze_race(race)
+    run=repo.start_run(race.race_date,'now','test');repo.save(run,analysis)
+    with repo.connect() as db:
+        db.execute("INSERT INTO legacy_prediction_keys VALUES('2026-01-01',1,1)")
+        db.execute("UPDATE race_predictions SET predicted_at='2026-01-01 00:00:00'")
+    # A late refresh must not invalidate an existing, valid historical first snapshot.
+    run=repo.start_run(race.race_date,'now','test');repo.save(run,analysis)
+    repo.publish_predictions([analysis],{})
+    item=repo.performance_payload()['races'][0]
+    assert item['evaluation_status']=='eligible'
+    assert item['stage']=='legacy_first_snapshot'
+
+
 def test_learning_obeys_live_skip_and_rejects_future_results():
     race=Race('2030-01-01',1,'test',1,entrants=[Entrant(lane=i) for i in range(1,7)])
     analysis=analyze_race(race)
